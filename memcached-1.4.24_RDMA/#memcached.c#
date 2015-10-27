@@ -14,7 +14,6 @@
  *      Brad Fitzpatrick <brad@danga.com>
  */
 #include "memcached.h"
-#include "sharedmalloc.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -104,7 +103,6 @@ static void conn_free(conn *c);
 /** exported globals **/
 struct stats stats;
 struct settings settings;
-void *failoverManagerMsg;
 time_t process_started;     /* when the process was started */
 conn **conns;
 
@@ -249,15 +247,6 @@ static void settings_init(void) {
     settings.tail_repair_time = TAIL_REPAIR_TIME_DEFAULT;
     settings.flush_enabled = true;
     settings.crawls_persleep = 1000;
-
-    settings.shared_malloc_slabs = false;
-    settings.shared_malloc_slabs_key = NULL;
-    settings.shared_malloc_slabs_lists = false;
-    settings.shared_malloc_slabs_lists_key = NULL;
-    settings.shared_malloc_assoc = false;
-    settings.shared_malloc_assoc_key = NULL;
-    settings.failover_manager = false;
-    settings.failover_manager_key = NULL;
 }
 
 /*
@@ -947,18 +936,6 @@ static void complete_nread_ascii(conn *c) {
       switch (ret) {
       case STORED:
           out_string(c, "STORED");
-          if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
-          {
-              /* notify the FailoverManager about item store */
-              /* TODO: check that the item is fully stored - key and value */
-              fprintf(stderr, "writing true to failoverManagerMsg\n");
-              if (failoverManagerMsg == NULL)
-              {
-                  fprintf(stderr, "failoverManagerMsg is null before set\n");
-              }
-              memset(failoverManagerMsg, 116 /* 116 in ascii is 't' for 'true' */, 1); /* TODO: update in a better way - by date or counter or something */
-              fprintf(stderr, "writing true to failoverManagerMsg - COMPLETED\n");
-          }
           break;
       case EXISTS:
           out_string(c, "EXISTS");
@@ -2330,6 +2307,7 @@ enum store_item_type do_store_item(item *it, int comm, conn *c, const uint32_t h
 
     item *new_it = NULL;
     int flags;
+
     if (old_it != NULL && comm == NREAD_ADD) {
         /* add only adds a nonexistent item, but promote to head of LRU */
         do_item_update(old_it);
@@ -2391,6 +2369,7 @@ enum store_item_type do_store_item(item *it, int comm, conn *c, const uint32_t h
                 flags = (int) strtol(ITEM_suffix(old_it), (char **) NULL, 10);
 
                 new_it = do_item_alloc(key, it->nkey, flags, old_it->exptime, it->nbytes + old_it->nbytes - 2 /* CRLF */, hv);
+
                 if (new_it == NULL) {
                     /* SERVER_ERROR out of memory */
                     if (old_it != NULL)
@@ -2409,6 +2388,7 @@ enum store_item_type do_store_item(item *it, int comm, conn *c, const uint32_t h
                     memcpy(ITEM_data(new_it), ITEM_data(it), it->nbytes);
                     memcpy(ITEM_data(new_it) + it->nbytes - 2 /* CRLF */, ITEM_data(old_it), old_it->nbytes);
                 }
+
                 it = new_it;
             }
         }
@@ -2705,15 +2685,6 @@ static void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("hot_lru_pct", "%d", settings.hot_lru_pct);
     APPEND_STAT("warm_lru_pct", "%d", settings.hot_lru_pct);
     APPEND_STAT("expirezero_does_not_evict", "%s", settings.expirezero_does_not_evict ? "yes" : "no");
-
-    APPEND_STAT("shared_malloc_slabs", "%s", settings.shared_malloc_slabs ? "yes" : "no");
-    APPEND_STAT("shared_malloc_slabs_key", "%s", settings.shared_malloc_slabs_key ? settings.shared_malloc_slabs_key : "NULL");
-    APPEND_STAT("shared_malloc_slabs_lists", "%s", settings.shared_malloc_slabs_lists ? "yes" : "no");
-    APPEND_STAT("shared_malloc_slabs_lists_key", "%s", settings.shared_malloc_slabs_lists_key ? settings.shared_malloc_slabs_lists_key : "NULL");
-    APPEND_STAT("shared_malloc_assoc", "%s", settings.shared_malloc_assoc ? "yes" : "no");
-    APPEND_STAT("shared_malloc_assoc_key", "%s", settings.shared_malloc_assoc_key ? settings.shared_malloc_assoc_key : "NULL");
-    APPEND_STAT("failover_manager", "%s", settings.failover_manager ? "yes" : "no");
-    APPEND_STAT("failover_manager_key", "%s", settings.failover_manager_key ? settings.failover_manager_key : "NULL");
 }
 
 static void conn_to_str(const conn *c, char *buf) {
@@ -2910,10 +2881,10 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
     token_t *key_token = &tokens[KEY_TOKEN];
     char *suffix;
     assert(c != NULL);
-    
+
     do {
         while(key_token->length != 0) {
-            
+
             key = key_token->value;
             nkey = key_token->length;
 
@@ -3051,7 +3022,7 @@ static inline void process_get_command(conn *c, token_t *tokens, size_t ntokens,
         }
 
     } while(key_token->value != NULL);
-    fprintf(stderr, "%d: process_get_command 10\n", c->sfd);
+
     c->icurr = c->ilist;
     c->ileft = i;
     if (return_cas) {
@@ -3086,13 +3057,16 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
     int vlen;
     uint64_t req_cas_id=0;
     item *it;
+
     assert(c != NULL);
+
     set_noreply_maybe(c, tokens, ntokens);
 
     if (tokens[KEY_TOKEN].length > KEY_MAX_LENGTH) {
         out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
+
     key = tokens[KEY_TOKEN].value;
     nkey = tokens[KEY_TOKEN].length;
 
@@ -3102,6 +3076,7 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
         out_string(c, "CLIENT_ERROR bad command line format");
         return;
     }
+
     /* Ubuntu 8.04 breaks when I pass exptime to safe_strtol */
     exptime = exptime_int;
 
@@ -3118,7 +3093,7 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
             return;
         }
     }
-    
+
     vlen += 2;
     if (vlen < 0 || vlen - 2 < 0) {
         out_string(c, "CLIENT_ERROR bad command line format");
@@ -3128,7 +3103,9 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
     if (settings.detail_enabled) {
         stats_prefix_record_set(key, nkey);
     }
+
     it = item_alloc(key, nkey, flags, realtime(exptime), vlen);
+
     if (it == 0) {
         if (! item_size_ok(nkey, flags, vlen))
             out_string(c, "SERVER_ERROR object too large for cache");
@@ -3151,6 +3128,7 @@ static void process_update_command(conn *c, token_t *tokens, const size_t ntoken
         return;
     }
     ITEM_set_cas(it, req_cas_id);
+
     c->item = it;
     c->ritem = ITEM_data(it);
     c->rlbytes = it->nbytes;
@@ -3451,8 +3429,7 @@ static void process_command(conn *c, char *command) {
     assert(c != NULL);
 
     MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
-    
-    fprintf(stderr, "%d: process_command 1\n", c->sfd);
+
     if (settings.verbose > 1)
         fprintf(stderr, "<%d %s\n", c->sfd, command);
 
@@ -3469,16 +3446,12 @@ static void process_command(conn *c, char *command) {
         return;
     }
 
-    fprintf(stderr, "%d: process_command 2\n", c->sfd);
     ntokens = tokenize_command(command, tokens, MAX_TOKENS);
-    fprintf(stderr, "%d: process_command 3\n", c->sfd);
     if (ntokens >= 3 &&
         ((strcmp(tokens[COMMAND_TOKEN].value, "get") == 0) ||
          (strcmp(tokens[COMMAND_TOKEN].value, "bget") == 0))) {
 
-        fprintf(stderr, "%d: process_command 4\n", c->sfd);
         process_get_command(c, tokens, ntokens, false);
-        fprintf(stderr, "%d: process_command 5\n", c->sfd);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strcmp(tokens[COMMAND_TOKEN].value, "add") == 0 && (comm = NREAD_ADD)) ||
@@ -3785,8 +3758,10 @@ static int try_read_command(conn *c) {
         }
     } else {
         char *el, *cont;
+
         if (c->rbytes == 0)
             return 0;
+
         el = memchr(c->rcurr, '\n', c->rbytes);
         if (!el) {
             if (c->rbytes > 1024) {
@@ -3806,6 +3781,7 @@ static int try_read_command(conn *c) {
                     return 1;
                 }
             }
+
             return 0;
         }
         cont = el + 1;
@@ -5113,10 +5089,6 @@ int main (int argc, char **argv) {
     enum {
         MAXCONNS_FAST = 0,
         HASHPOWER_INIT,
-        SHARED_MALLOC_SLABS,
-        SHARED_MALLOC_ASSOC,
-        SHARED_MALLOC_SLABS_LISTS,
-        FAILOVER_MANAGER,
         SLAB_REASSIGN,
         SLAB_AUTOMOVE,
         TAIL_REPAIR_TIME,
@@ -5132,10 +5104,6 @@ int main (int argc, char **argv) {
     char *const subopts_tokens[] = {
         [MAXCONNS_FAST] = "maxconns_fast",
         [HASHPOWER_INIT] = "hashpower",
-        [SHARED_MALLOC_SLABS] = "shared_malloc_slabs",
-        [SHARED_MALLOC_SLABS_LISTS] = "shared_malloc_slabs_lists",
-        [SHARED_MALLOC_ASSOC] = "shared_malloc_assoc",
-        [FAILOVER_MANAGER] = "failover_manager",
         [SLAB_REASSIGN] = "slab_reassign",
         [SLAB_AUTOMOVE] = "slab_automove",
         [TAIL_REPAIR_TIME] = "tail_repair_time",
@@ -5500,38 +5468,6 @@ int main (int argc, char **argv) {
             case NOEXP_NOEVICT:
                 settings.expirezero_does_not_evict = true;
                 break;
-            case SHARED_MALLOC_SLABS:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing shared_malloc_slabs argument\n");
-                    return 1;
-                };
-                settings.shared_malloc_slabs = true;
-                settings.shared_malloc_slabs_key = subopts_value;
-                break;
-            case SHARED_MALLOC_SLABS_LISTS:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing settings.shared_malloc_slabs_lists argument\n");
-                    return 1;
-                };
-                settings.shared_malloc_slabs_lists = true;
-                settings.shared_malloc_slabs_lists_key = subopts_value;
-                break;
-            case SHARED_MALLOC_ASSOC:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing shared_malloc_assoc argument\n");
-                    return 1;
-                };
-                settings.shared_malloc_assoc = true;
-                settings.shared_malloc_assoc_key = subopts_value;
-                break;
-            case FAILOVER_MANAGER:
-                if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing failover_manager argument\n");
-                    return 1;
-                };
-                settings.failover_manager = true;
-                settings.failover_manager_key = subopts_value;
-                break;
             default:
                 printf("Illegal suboption \"%s\"\n", subopts_value);
                 return 1;
@@ -5542,20 +5478,6 @@ int main (int argc, char **argv) {
         default:
             fprintf(stderr, "Illegal argument \"%c\"\n", c);
             return 1;
-        }
-    }
-
-    if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.failover_manager)
-    {
-        fprintf(stderr, "mapping failoverManagerMsg\n");
-        failoverManagerMsg = shared_malloc(0, 1, settings.failover_manager_key, HARD_LOCK);
-        if (failoverManagerMsg == NULL)
-        {
-            fprintf(stderr, "mapping failoverManagerMsg - FAILED\n");
-        }
-        else
-        {        
-            fprintf(stderr, "mapping failoverManagerMsg - COMPLETED\n");
         }
     }
 

@@ -11,6 +11,7 @@
  * The rest of the file is licensed under the BSD license.  See LICENSE.
  */
 
+#include "sharedmalloc.h"
 #include "memcached.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -64,7 +65,11 @@ void assoc_init(const int hashtable_init) {
     if (hashtable_init) {
         hashpower = hashtable_init;
     }
-    primary_hashtable = calloc(hashsize(hashpower), sizeof(void *));
+    if (settings.shared_malloc_assoc) {
+        primary_hashtable = shared_malloc((void *)0x00007fa2fdf10000, hashsize(hashpower)*sizeof(void *), settings.shared_malloc_assoc_key, NO_LOCK);//TODO: check that no need to add zeroes (like in calloc)
+    } else {
+        primary_hashtable = calloc(hashsize(hashpower), sizeof(void *));
+    }
     if (! primary_hashtable) {
         fprintf(stderr, "Failed to init hashtable.\n");
         exit(EXIT_FAILURE);
@@ -123,25 +128,27 @@ static item** _hashitem_before (const char *key, const size_t nkey, const uint32
 }
 
 /* grows the hashtable to the next power of 2. */
-static void assoc_expand(void) {
-    old_hashtable = primary_hashtable;
+static void assoc_expand(void) { /* if expend is called, exit that system. expending should not happen */
+    fprintf(stderr, "expending hashtable is forbidden.\n");
+    exit(EXIT_FAILURE);
+//    old_hashtable = primary_hashtable;
 
-    primary_hashtable = calloc(hashsize(hashpower + 1), sizeof(void *));
-    if (primary_hashtable) {
-        if (settings.verbose > 1)
-            fprintf(stderr, "Hash table expansion starting\n");
-        hashpower++;
-        expanding = true;
-        expand_bucket = 0;
-        STATS_LOCK();
-        stats.hash_power_level = hashpower;
-        stats.hash_bytes += hashsize(hashpower) * sizeof(void *);
-        stats.hash_is_expanding = 1;
-        STATS_UNLOCK();
-    } else {
-        primary_hashtable = old_hashtable;
-        /* Bad news, but we can keep running. */
-    }
+//    primary_hashtable = calloc(hashsize(hashpower + 1), sizeof(void *));
+//    if (primary_hashtable) {
+//        if (settings.verbose > 1)
+//            fprintf(stderr, "Hash table expansion starting\n");
+//        hashpower++;
+//        expanding = true;
+//        expand_bucket = 0;
+//        STATS_LOCK();
+//       stats.hash_power_level = hashpower;
+//        stats.hash_bytes += hashsize(hashpower) * sizeof(void *);
+//        stats.hash_is_expanding = 1;
+//        STATS_UNLOCK();
+//    } else {
+//        primary_hashtable = old_hashtable;
+//        /* Bad news, but we can keep running. */
+//    }
 }
 
 static void assoc_start_expand(void) {

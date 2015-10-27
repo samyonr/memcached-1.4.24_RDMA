@@ -142,13 +142,13 @@ NROFF = nroff
 MANS = $(man_MANS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-ACLOCAL = ${SHELL} /home/dormando/d/p/danga/git/memcached/missing aclocal-1.14
+ACLOCAL = ${SHELL} /home/ha-101/Desktop/compiled_works/memcached-1.4.24/missing aclocal-1.14
 AMTAR = $${TAR-tar}
 AM_DEFAULT_VERBOSITY = 1
-AUTOCONF = ${SHELL} /home/dormando/d/p/danga/git/memcached/missing autoconf
-AUTOHEADER = ${SHELL} /home/dormando/d/p/danga/git/memcached/missing autoheader
-AUTOMAKE = ${SHELL} /home/dormando/d/p/danga/git/memcached/missing automake-1.14
-AWK = gawk
+AUTOCONF = ${SHELL} /home/ha-101/Desktop/compiled_works/memcached-1.4.24/missing autoconf
+AUTOHEADER = ${SHELL} /home/ha-101/Desktop/compiled_works/memcached-1.4.24/missing autoheader
+AUTOMAKE = ${SHELL} /home/ha-101/Desktop/compiled_works/memcached-1.4.24/missing automake-1.14
+AWK = mawk
 CC = gcc -std=gnu99
 CCDEPMODE = depmode=gcc3
 CFLAGS = -g -O2 -pthread -pthread -Wall -Werror -pedantic -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls
@@ -175,7 +175,7 @@ LDFLAGS =
 LIBOBJS = 
 LIBS = -levent 
 LTLIBOBJS = 
-MAKEINFO = ${SHELL} /home/dormando/d/p/danga/git/memcached/missing makeinfo
+MAKEINFO = ${SHELL} /home/ha-101/Desktop/compiled_works/memcached-1.4.24/missing makeinfo
 MKDIR_P = /bin/mkdir -p
 OBJEXT = o
 PACKAGE = memcached
@@ -195,10 +195,10 @@ STRIP =
 VERSION = 1.4.24
 XML2RFC = no
 XSLTPROC = no
-abs_builddir = /home/dormando/d/p/danga/git/memcached/doc
-abs_srcdir = /home/dormando/d/p/danga/git/memcached/doc
-abs_top_builddir = /home/dormando/d/p/danga/git/memcached
-abs_top_srcdir = /home/dormando/d/p/danga/git/memcached
+abs_builddir = /home/ha-101/Desktop/compiled_works/memcached-1.4.24/doc
+abs_srcdir = /home/ha-101/Desktop/compiled_works/memcached-1.4.24/doc
+abs_top_builddir = /home/ha-101/Desktop/compiled_works/memcached-1.4.24
+abs_top_srcdir = /home/ha-101/Desktop/compiled_works/memcached-1.4.24
 ac_ct_CC = gcc
 am__include = include
 am__leading_dot = .
@@ -225,7 +225,7 @@ host_vendor = unknown
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /home/dormando/d/p/danga/git/memcached/install-sh
+install_sh = ${SHELL} /home/ha-101/Desktop/compiled_works/memcached-1.4.24/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -492,10 +492,10 @@ uninstall-man: uninstall-man1
 
 
 protocol-binary.txt: $(.TARGET:R).full
-	no -c /home/dormando/d/p/danga/git/memcached/doc $(.TARGET:R).full $@
+	no -c /home/ha-101/Desktop/compiled_works/memcached-1.4.24/doc $(.TARGET:R).full $@
 
 protocol-binary-range.txt: $(.TARGET:R).full
-	no -c /home/dormando/d/p/danga/git/memcached/doc $(.TARGET:R).full $@
+	no -c /home/ha-101/Desktop/compiled_works/memcached-1.4.24/doc $(.TARGET:R).full $@
 
 protocol-binary.full: $(.TARGET:R).xml xml2rfc/rfc2629-noinc.xsl
 	no --nonet xml2rfc/rfc2629-noinc.xsl $(.TARGET:R).xml > $@

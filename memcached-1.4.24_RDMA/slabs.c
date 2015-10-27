@@ -7,6 +7,7 @@
  * slab size is always 1MB, since that's the maximum item size allowed by the
  * memcached protocol.
  */
+#include "sharedmalloc.h"
 #include "memcached.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -20,6 +21,7 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include <unistd.h>
 
 /* powers-of-N allocation structures */
 
@@ -51,6 +53,10 @@ static void *mem_base = NULL;
 static void *mem_current = NULL;
 static size_t mem_avail = 0;
 
+static void *mem_slabs_lists_base = NULL;
+static void *mem_slabs_lists_current = NULL;
+static size_t mem_slabs_lists_avail = 0;
+
 /**
  * Access to the slab allocator is protected by this lock
  */
@@ -63,6 +69,8 @@ static pthread_mutex_t slabs_rebalance_lock = PTHREAD_MUTEX_INITIALIZER;
 static int do_slabs_newslab(const unsigned int id);
 static void *memory_allocate(size_t size);
 static void do_slabs_free(void *ptr, const size_t size, unsigned int id);
+
+static void *memory_slabs_lists_allocate(size_t size);
 
 /* Preallocate as many slab pages as possible (called from slabs_init)
    on start-up, so users don't get confused out-of-memory errors when
@@ -103,10 +111,19 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
 
     if (prealloc) {
         /* Allocate everything in a big chunk with malloc */
-        mem_base = malloc(mem_limit);
+        if (settings.shared_malloc_slabs) {
+            mem_base = shared_malloc((void *)0x00007fa1fdf10000, mem_limit, settings.shared_malloc_slabs_key, NO_LOCK);     /* TODO: probably add lock */
+            mem_slabs_lists_base = shared_malloc((void *)0x00007fa2ff959000, 16 * sizeof(void *) * 34, settings.shared_malloc_slabs_lists_key, NO_LOCK);     /* TODO: probably add lock */ /* TODO: add variables / const, not magic numbers */
+        } else {
+            mem_base = malloc(mem_limit);
+            mem_slabs_lists_base = malloc(16 * sizeof(void *) * 34); /* TODO: add variables / const, not magic numbers */
+        }
         if (mem_base != NULL) {
             mem_current = mem_base;
             mem_avail = mem_limit;
+
+            mem_slabs_lists_current = mem_slabs_lists_base;
+            mem_slabs_lists_avail = 16 * sizeof(void *) * 34; /* TODO: add variables / const, not magic numbers */
         } else {
             fprintf(stderr, "Warning: Failed to allocate requested memory in"
                     " one large chunk.\nWill allocate in smaller chunks\n");
@@ -177,8 +194,16 @@ static void slabs_preallocate (const unsigned int maxslabs) {
 static int grow_slab_list (const unsigned int id) {
     slabclass_t *p = &slabclass[id];
     if (p->slabs == p->list_size) {
+        fprintf(stderr, "do slabs realloc for id - %d - and p->list_size = %d\n",id, p->list_size);
         size_t new_size =  (p->list_size != 0) ? p->list_size * 2 : 16;
-        void *new_list = realloc(p->slab_list, new_size * sizeof(void *));
+        fprintf(stderr, "new_size = %zu\n", new_size);
+        if (p-> slab_list == NULL)
+        {
+            fprintf(stderr, "p->slab_list is null\n");
+        }
+        fprintf(stderr, "new_size * sizeof(void *) = %zu\n", new_size * sizeof(void *));
+        /* void *new_list = realloc(p->slab_list, new_size * sizeof(void *)); */
+        void *new_list = memory_slabs_lists_allocate(new_size * sizeof(void *));
         if (new_list == 0) return 0;
         p->list_size = new_size;
         p->slab_list = new_list;
@@ -229,14 +254,12 @@ static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *to
     slabclass_t *p;
     void *ret = NULL;
     item *it = NULL;
-
     if (id < POWER_SMALLEST || id > power_largest) {
         MEMCACHED_SLABS_ALLOCATE_FAILED(size, 0);
         return NULL;
     }
     p = &slabclass[id];
     assert(p->sl_curr == 0 || ((item *)p->slots)->slabs_clsid == 0);
-
     *total_chunks = p->slabs * p->perslab;
     /* fail unless we have space at the end of a recently allocated page,
        we have something on our freelist, or we could allocate a new page */
@@ -247,7 +270,9 @@ static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *to
         /* return off our freelist */
         it = (item *)p->slots;
         p->slots = it->next;
-        if (it->next) it->next->prev = 0;
+        if (it->next) {
+            it->next->prev = 0;
+        }
         /* Kill flag and initialize refcount here for lock safety in slab
          * mover's freeness detection. */
         it->it_flags &= ~ITEM_SLABBED;
@@ -262,14 +287,12 @@ static void *do_slabs_alloc(const size_t size, unsigned int id, unsigned int *to
     } else {
         MEMCACHED_SLABS_ALLOCATE_FAILED(size, id);
     }
-
     return ret;
 }
 
 static void do_slabs_free(void *ptr, const size_t size, unsigned int id) {
     slabclass_t *p;
     item *it;
-
     assert(id >= POWER_SMALLEST && id <= power_largest);
     if (id < POWER_SMALLEST || id > power_largest)
         return;
@@ -378,6 +401,40 @@ static void do_slabs_stats(ADD_STAT add_stats, void *c) {
     APPEND_STAT("active_slabs", "%d", total);
     APPEND_STAT("total_malloced", "%llu", (unsigned long long)mem_malloced);
     add_stats(NULL, 0, NULL, 0, c);
+}
+
+static void *memory_slabs_lists_allocate(size_t size) {
+    void *ret;
+
+    fprintf(stderr, "using memory_slabs_lists_allocate for size - %zu\n", size);
+    if (mem_slabs_lists_base == NULL) {
+        /* We are not using a preallocated large memory chunk */
+        fprintf(stderr, "memory_slabs_lists_allocate - using malloc\n");
+        ret = malloc(size);
+    } else {
+        fprintf(stderr, "memory_slabs_lists_allocate - using preallocated memory\n");
+        ret = mem_slabs_lists_current;
+
+        if (size > mem_slabs_lists_avail) {
+            return NULL;
+        }
+
+        /* mem_current pointer _must_ be aligned!!! */
+        /* TODO: hopping that size is 16 * sizeof(void*), maybe need to add align later         
+        if (size % CHUNK_ALIGN_BYTES) {
+            size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES);
+        }
+        */
+
+        mem_slabs_lists_current = ((char*)mem_slabs_lists_current) + size;
+        if (size < mem_slabs_lists_avail) {
+            mem_slabs_lists_avail -= size;
+        } else {
+            mem_slabs_lists_avail = 0;
+        }
+    }
+    fprintf(stderr, "memory_slabs_lists_allocate - mem_slabs_lists_avail = %zu\n",mem_slabs_lists_avail);
+    return ret;
 }
 
 static void *memory_allocate(size_t size) {
@@ -547,7 +604,7 @@ static int slab_rebalance_move(void) {
     uint32_t hv;
     void *hold_lock;
     enum move_status status = MOVE_PASS;
-
+    fprintf(stderr, "slab_rablance_move 1\n");
     pthread_mutex_lock(&slabs_lock);
 
     s_cls = &slabclass[slab_rebal.s_clsid];

@@ -206,10 +206,8 @@ item *do_item_alloc(char *key, const size_t nkey, const int flags,
         pthread_mutex_unlock(&lru_locks[id]);
         return NULL;
     }
-
     assert(it->slabs_clsid == 0);
     //assert(it != heads[id]);
-
     /* Refcount is seeded to 1 by slabs_alloc() */
     it->next = it->prev = it->h_next = 0;
     /* Items are initially loaded into the HOT_LRU. This is '0' but I want at
@@ -731,7 +729,6 @@ item *do_item_get(const char *key, const size_t nkey, const uint32_t hv) {
             DEBUG_REFCNT(it, '+');
         }
     }
-
     if (settings.verbose > 2)
         fprintf(stderr, "\n");
 

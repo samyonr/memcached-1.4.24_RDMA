@@ -337,11 +337,21 @@ struct settings {
     int warm_lru_pct; /* percentage of slab space for WARM_LRU */
     int crawls_persleep; /* Number of LRU crawls to run before sleeping */
     bool expirezero_does_not_evict; /* exptime == 0 goes into NOEXP_LRU */
+
+    bool shared_malloc_slabs; /* shared malloc for slabs.c on/off */
+    char* shared_malloc_slabs_key; /* shared malloc for slabs.c key */
+    bool shared_malloc_slabs_lists; /* shared malloc for slabs.c slabs lists on/off */
+    char* shared_malloc_slabs_lists_key; /* shared malloc for slabs.c slabs lists key */
+    bool shared_malloc_assoc; /* shared malloc for assoc.c on/off */
+    char* shared_malloc_assoc_key; /* shared malloc for assoc.c key */
+    bool failover_manager; /* failover manager on/off */
+    char* failover_manager_key; /* failover manager key for using shared malloc */
 };
 
 extern struct stats stats;
 extern time_t process_started;
 extern struct settings settings;
+extern void *failoverManagerMsg;
 
 #define ITEM_LINKED 1
 #define ITEM_CAS 2
@@ -551,6 +561,7 @@ extern int daemonize(int nochdir, int noclose);
 #include "trace.h"
 #include "hash.h"
 #include "util.h"
+/* #include "sharedmalloc.h" */
 
 /*
  * Functions such as the libevent-related calls that need to do cross-thread
