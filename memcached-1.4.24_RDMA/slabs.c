@@ -604,7 +604,6 @@ static int slab_rebalance_move(void) {
     uint32_t hv;
     void *hold_lock;
     enum move_status status = MOVE_PASS;
-    fprintf(stderr, "slab_rablance_move 1\n");
     pthread_mutex_lock(&slabs_lock);
 
     s_cls = &slabclass[slab_rebal.s_clsid];

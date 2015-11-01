@@ -3452,7 +3452,6 @@ static void process_command(conn *c, char *command) {
 
     MEMCACHED_PROCESS_COMMAND_START(c->sfd, c->rcurr, c->rbytes);
     
-    fprintf(stderr, "%d: process_command 1\n", c->sfd);
     if (settings.verbose > 1)
         fprintf(stderr, "<%d %s\n", c->sfd, command);
 
@@ -3469,16 +3468,12 @@ static void process_command(conn *c, char *command) {
         return;
     }
 
-    fprintf(stderr, "%d: process_command 2\n", c->sfd);
     ntokens = tokenize_command(command, tokens, MAX_TOKENS);
-    fprintf(stderr, "%d: process_command 3\n", c->sfd);
     if (ntokens >= 3 &&
         ((strcmp(tokens[COMMAND_TOKEN].value, "get") == 0) ||
          (strcmp(tokens[COMMAND_TOKEN].value, "bget") == 0))) {
 
-        fprintf(stderr, "%d: process_command 4\n", c->sfd);
         process_get_command(c, tokens, ntokens, false);
-        fprintf(stderr, "%d: process_command 5\n", c->sfd);
 
     } else if ((ntokens == 6 || ntokens == 7) &&
                ((strcmp(tokens[COMMAND_TOKEN].value, "add") == 0 && (comm = NREAD_ADD)) ||
