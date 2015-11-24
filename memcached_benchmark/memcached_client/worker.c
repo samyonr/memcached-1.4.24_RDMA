@@ -1,6 +1,8 @@
 
 #include "worker.h"
 
+pthread_mutex_t move_connection_lock = PTHREAD_MUTEX_INITIALIZER;
+
 void* workerFunction(void* arg) {
 
   struct worker* worker = arg;
@@ -30,7 +32,7 @@ void* workerFunction(void* arg) {
   }
 */
   workerLoop(worker);
-
+  printf("bye bye\n");
   return NULL;
 
 }//End workerFunction()
@@ -40,18 +42,14 @@ void workerLoop(struct worker* worker) {
 
   event_base_priority_init(worker->event_base, 2);
 
+  worker->event_map = malloc(sizeof(struct event_map) * (worker->nConnections)); // mult by 2 is just for creating spare space for more evens
+  worker->nEvents = (worker->nConnections);
+
   //Seed event for each fd
   int i;
+
   for( i = 0; i < worker->nConnections; i++) {
-
-    struct event* ev = event_new(worker->event_base, worker->connections[i]->sock, EV_WRITE|EV_PERSIST, sendCallback, worker);
-    event_priority_set(ev, 1);
-    event_add(ev, NULL);
-
-    ev = event_new(worker->event_base, worker->connections[i]->sock, EV_READ|EV_PERSIST, receiveCallback, worker);
-    event_priority_set(ev, 2);
-    event_add(ev, NULL);
-
+    createEvents(i, worker);
   }//End for i
 
   gettimeofday(&(worker->last_write_time), NULL);
@@ -74,7 +72,7 @@ int pushRequest(struct worker* worker, struct request* request) {
 //  printf("push: size %d head %d tail %d\n", worker->n_requests, worker->head, worker->tail);
 
   if(worker->n_requests == QUEUE_SIZE){
-    printf("Reached queusize max\n");
+    printf("Reached queue size max\n");
     return 0;
   }
   
@@ -89,6 +87,7 @@ int pushRequest(struct worker* worker, struct request* request) {
 struct request* getNextRequest(struct worker* worker) {
 
   if(worker->n_requests == 0) {
+    //printf("no more requests\n");
     return NULL;
   }
 
@@ -104,10 +103,8 @@ void sendCallback(int fd, short eventType, void* args) {
   struct worker* worker = args;
   struct timeval timestamp, timediff, timeadd;
   gettimeofday(&timestamp, NULL);
-
   timersub(&timestamp, &(worker->last_write_time), &timediff);
   double diff = timediff.tv_usec * 1e-6  + timediff.tv_sec;
-
   struct int_dist* interarrival_dist = worker->config->interarrival_dist;
   int interarrival_time  = 0;
   //Null interarrival_dist means no waiting
@@ -127,7 +124,6 @@ void sendCallback(int fd, short eventType, void* args) {
 
   timeadd.tv_sec = 0; timeadd.tv_usec = interarrival_time; 
   timeradd(&(worker->last_write_time), &timeadd, &(worker->last_write_time));
-
   struct request* request = NULL;
   if(worker->incr_fix_queue_tail != worker->incr_fix_queue_head) {
     request = worker->incr_fix_queue[worker->incr_fix_queue_head];
@@ -136,6 +132,7 @@ void sendCallback(int fd, short eventType, void* args) {
   } else {
   //  printf(")preload %d warmup key %d\n", worker->config->pre_load, worker->warmup_key);
     if(worker->config->pre_load == 1 && worker->warmup_key < 0) {
+      printf("here is how requests disappear\n");
       return;
     } else {
       request = generateRequest(worker->config, worker);
@@ -146,17 +143,95 @@ void sendCallback(int fd, short eventType, void* args) {
   }
   if( !pushRequest(worker, request) ) {
     //Queue is full, bail
-//    printf("Full queue\n");
+    printf("Full queue\n");
     deleteRequest(request);
     return;
   }
-
-
-  sendRequest(request);
+  sendWorkerRequest_sendCallback(request,worker, 0);
   
- 
 }//End sendCallback()
 
+int sendWorkerRequest_sendCallback(struct request* request,struct worker* worker, int iteration)
+{
+  int old_sock = 0;
+  if (iteration > 0)
+  {
+     printf("sending worker request, fd %d. iteration %d\n", request->connection->sock,iteration);
+  }
+  int sendResult = sendRequest(request, &old_sock);
+  if (sendResult == -1 && iteration != 3)
+  {
+    printf("Resending again %d\n",iteration+1);
+    return sendWorkerRequest(request,worker, ++iteration);
+  }
+  else if (sendResult == -1 && iteration == 3)
+  {
+    printf("failed resending 3 times\n");
+	deleteRequest(request);
+    return 0;
+  }
+  return 1;
+}
+
+int sendWorkerRequest(struct request* request,struct worker* worker, int iteration)
+{
+  int old_sock = 0;
+  if (iteration > 0)
+  {
+     printf("sending worker request, fd %d. iteration %d\n", request->connection->sock,iteration);
+  }
+  int sendResult = sendRequest(request, &old_sock);
+  if (sendResult == -1 && iteration != 3)
+  {
+    //deleteRequest(request);
+    if( !pushRequest(worker, request) ) {
+    //Queue is full, bail
+    //printf("Full queue\n");
+      printf("Request queue is full\n");
+      deleteRequest(request);
+      return 0;
+    }
+    printf("Resending again %d\n",iteration+1);
+    return sendWorkerRequest(request,worker, ++iteration);
+  }
+  else if (sendResult == -1 && iteration == 3)
+  {
+    printf("failed resending 3 times\n");
+	deleteRequest(request);
+    return 0;
+  }
+  return 1;
+}
+
+void createEvents(int server, struct worker* worker)
+{
+    printf("connection number %d: adding send event with fd %d\n",server, worker->connections[server]->sock);
+    struct event* ev1 = event_new(worker->event_base, worker->connections[server]->sock, EV_WRITE|EV_PERSIST, sendCallback, worker);
+    event_priority_set(ev1, 1);
+    event_add(ev1, NULL);
+
+    printf("connection number %d: adding read event with fd %d\n",server, worker->connections[server]->sock);
+    struct event* ev2 = event_new(worker->event_base, worker->connections[server]->sock, EV_READ|EV_PERSIST, receiveCallback, worker);
+    event_priority_set(ev2, 2);
+    event_add(ev2, NULL);
+
+    worker->event_map[server] = (struct event_map) { .event_send = ev1, .fd = worker->connections[server]->sock, .event_receive = ev2 };
+}
+
+void deleteEvents(int fd, struct event_map* event_map, int nEvents)
+{
+  int i;
+  for (i = 0; i < nEvents; i++)
+  {
+    if (event_map[i].fd == fd)
+    {
+      printf("deleting event with fd %d\n", fd);
+      event_free(event_map[i].event_receive);
+      event_free(event_map[i].event_send);
+      event_map[i].fd = 0;
+    }
+  }
+}
 
 void receiveCallback(int fd, short eventType, void* args) {
 
@@ -164,19 +239,38 @@ void receiveCallback(int fd, short eventType, void* args) {
 
   struct request* request = getNextRequest(worker);
   if(request == NULL) { 
-    printf("Error: Tried to get a null request\n");
+    //printf("Error: Tried to get a null request, fd %d\n",fd);
+    //exit(-1);
     return;
   }
-
   struct timeval readTimestamp, timediff;
   gettimeofday(&readTimestamp, NULL);
   timersub(&readTimestamp, &(request->send_time), &timediff);
   double diff = timediff.tv_usec * 1e-6  + timediff.tv_sec;
 
-  receiveResponse(request, diff); 
-  deleteRequest(request);
+  int old_sock = 0;
+  
+  int result = receiveResponse(request, diff, &old_sock);
+  if (result == -1)
+  {
+    if( !pushRequest(worker, request) ) {
+       //Queue is full, bail
+       printf("Full queue\n");
+       deleteRequest(request);
+       return;  
+    }
+	printf("sending worker request in receive-callback, fd %d. iteration %d\n", request->connection->sock,0);
+    int res = sendWorkerRequest(request,worker, 0);
+    if (res != 1)
+    {
+      return;
+    }
+  }
+  else
+  {
+    deleteRequest(request);
+  }
   worker->received_warmup_keys++;
-
   if(worker->config->pre_load == 1 && worker->config->dep_dist != NULL && worker->received_warmup_keys == worker->config->keysToPreload){
     printf("You are warmed up, sir\n");
     exit(0);
@@ -221,15 +315,19 @@ void createWorkers(struct config* config) {
   int total_connections = 0;
   for(i = 0; i < config->n_workers; i++) {
     int num_worker_connections = config->n_connections_total/config->n_workers + (i < config->n_connections_total % config->n_workers);
-    printf("num_worker_connections %d\n", num_worker_connections);
     total_connections += num_worker_connections;
+    printf("total_connections %d\n", total_connections);
     config->workers[i]->connections = malloc(sizeof(struct conn*) * num_worker_connections);
+	config->workers[i]->connection_server = malloc(sizeof(int) * num_worker_connections);
+	config->workers[i]->connection_server_variant = malloc(sizeof(int) * num_worker_connections);
     config->workers[i]->nConnections = num_worker_connections;
     config->workers[i]->received_warmup_keys = 0;
     int j;
     int server=i % config->n_servers; 
     for(j = 0; j < num_worker_connections; j++) {
       config->workers[i]->connections[j] = createConnection(config->server_ip_address[server], config->server_port[server], config->protocol_mode, config->naggles);
+	  config->workers[i]->connection_server[j] = server;
+	  config->workers[i]->connection_server_variant[j] = 0; //0 - original, 1 - backup_1, 2 - backup_2
     }
     int rc;
     //Create receive thread

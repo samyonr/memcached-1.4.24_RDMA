@@ -32,10 +32,14 @@ struct config {
   int naggles;
   int multiget_size;
   char* server_ip_address[MAX_SERVERS];
+  char* server_ip_address_backup[MAX_SERVERS];
+  char* server_ip_address_backup_2[MAX_SERVERS];
   char* server_file;
   char* input_file;
   char* output_file;
   int server_port[MAX_SERVERS];
+  int server_port_backup[MAX_SERVERS];
+  int server_port_backup_2[MAX_SERVERS];
   int server_memory;
   int keysToPreload;
   int scaling_factor;

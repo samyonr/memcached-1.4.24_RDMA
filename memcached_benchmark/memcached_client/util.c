@@ -106,7 +106,7 @@ char* nslookup(char* hostname){
 
 }//End nslookup
 
-void writeBlock(int fd, void* buffer, int writeSize) {
+int writeBlock(int fd, void* buffer, int writeSize) {
 
 #if DEBUG_READ_WRITE
   printf("Going to write %d bytes\n", writeSize);
@@ -114,7 +114,7 @@ void writeBlock(int fd, void* buffer, int writeSize) {
 
   int nWriteTotal = 0;
   int nWrite = 0;
-
+  
 #if DEBUG_READ_WRITE
   printf("Writing:\n");
   int i;
@@ -126,13 +126,13 @@ void writeBlock(int fd, void* buffer, int writeSize) {
   }
   printf("\n");
 #endif
-
   while(nWriteTotal != writeSize){
     nWrite = write(fd, buffer + nWriteTotal, writeSize - nWriteTotal);
     if(nWrite < 0) {
       printf("Write error: %d\n", nWrite);
       perror("Write error");
-      exit(-1);
+      printf("error occured during writing fd %d\n", fd);
+      return -1;
     }
     nWriteTotal += nWrite;
   }
@@ -145,10 +145,10 @@ void writeBlock(int fd, void* buffer, int writeSize) {
 #if DEBUG_READ_WRITE
   printf("Done with write block\n");
 #endif
-
+  return 1;
 }//End writeBlock()
 
-void readBlock(int fd, void* buffer, int readSize) {
+int readBlock(int fd, void* buffer, int readSize) {
 
 #if DEBUG_READ_WRITE
   printf("Going to read %d bytes\n", readSize);
@@ -159,8 +159,9 @@ void readBlock(int fd, void* buffer, int readSize) {
   while(nReadTotal != readSize){
     nRead = read(fd, buffer + nReadTotal, readSize - nReadTotal);
     if(nRead < 0) {
-      perror("Read error");
-      exit(-1);
+      printf("error occured during reading fd %d\n", fd);
+	  return -1;
+      //exit(-1);
     }
     nReadTotal += nRead;
   }
@@ -185,6 +186,6 @@ void readBlock(int fd, void* buffer, int readSize) {
 #if DEBUG_READ_WRITE
   printf("Done with read block\n");
 #endif
-
+  return 1;
 }//End readBlock()
 

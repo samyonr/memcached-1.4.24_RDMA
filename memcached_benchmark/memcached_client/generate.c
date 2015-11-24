@@ -58,7 +58,7 @@ struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* wo
 
   double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
   //Do a binary search
-  int top = 0;
+  int top = 1;
   int bottom = dep_dist->n_entries-1;
   int current = bottom/2;
   struct dep_entry* dep_entry = NULL;
@@ -163,9 +163,10 @@ double harmonicSum(int size, double alpha){
    sum+= (1.0 / pow(1.0*i, alpha));
  return sum;
 }
+
 struct dep_dist* loadDepFile(struct config* config) { 
 
-  printf("Loading key value file...");
+  printf("Loading key value file...\n");
   struct dep_dist* dist = malloc(sizeof(struct dep_dist));
 
   char lineBuffer[1024];
@@ -179,17 +180,20 @@ struct dep_dist* loadDepFile(struct config* config) {
   dist->n_entries = lines;
   int i = lines-1;
   file = fopen(config->input_file, "r");
-  double avg_size=0; 
-  while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
+  double avg_size=0;
+  //while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
+  for(;i > 0; i--) {
+    fgets(lineBuffer, sizeof(lineBuffer), file);
     char* cdfValue = strtok(lineBuffer, " ,\n");
     char* sizeValue = strtok(NULL, " ,\n");
     char* key = strtok(NULL, " ,\n");
     struct dep_entry* entry = malloc(sizeof(struct dep_entry));
     entry->cdf = atof(cdfValue);
     entry->size = atoi(sizeValue);
+
     strcpy(entry->key, key);
     dist->dep_entries[i] = entry;
-    i--;   
+    //i--;   
     avg_size+=entry->size; 
   }//End while()
   avg_size = avg_size/lines;
@@ -276,7 +280,8 @@ struct dep_dist* loadAndScaleDepFile(struct config* config) {
 struct request* generateRequest(struct config* config, struct worker* worker) {
 
   //Pick a random connection
-  struct conn* conn = worker->connections[randomFunction(worker) % worker->nConnections];
+  int connection_server = randomFunction(worker) % worker->nConnections;
+  struct conn* conn = worker->connections[connection_server];
 
   char* value = NULL;
   int valueSize = 0;
@@ -304,7 +309,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       int type = TYPE_SET;
       struct request* request;
       //printf("Picked key %d size %d\n", worker->warmup_key, valueSize);
-      request = createRequest(op, conn, worker, key, value,type);
+      request = createRequest(op, conn, worker, key, value,type, connection_server);
       request->next_request = NULL;
       return request;
 
@@ -322,7 +327,8 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       printf("zero length key: <%s> index %d\n", key, keyIndex);
     }
   }
-
+  
+  
   //Pick a request type
   struct request* request = NULL;
   int op = 0;
@@ -335,8 +341,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       int type = TYPE_INCR;
       int keyIndex = getIntQuantile(config->key_pop_dist);
       key = config->key_list->keys[keyIndex];
-
-      request = createRequest(op, conn, worker, key, value,type);
+      request = createRequest(op, conn, worker, key, value,type, connection_server);
       request->next_request = NULL;      
 
   } else if( ((randomFunction(worker) % 10000)/10000.0) < config->get_frac) {
@@ -355,7 +360,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
       }
       op = GETQ;
       int type = TYPE_MULTIGET;
-      request = createRequest(op, conn, worker, key, value,type);
+      request = createRequest(op, conn, worker, key, value,type, connection_server);
       //String together requests in linked list
       struct request* currentRequest = request;
        currentRequest->bad_multiget = 0;
@@ -365,7 +370,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
 
       int i;
       for(i = 0; i < nGets-2; i++){
-        struct request* nextRequest = createRequest(op, conn, worker, key, value, type);
+        struct request* nextRequest = createRequest(op, conn, worker, key, value, type, connection_server);
         currentRequest->next_request = nextRequest;
         if(worker->config->bad_multiget)
           currentRequest->bad_multiget = 1;
@@ -380,8 +385,8 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
         }
       }
       op = GET;
-
-      struct request* nextRequest = createRequest(op, conn, worker, key, value, type);
+     
+      struct request* nextRequest = createRequest(op, conn, worker, key, value, type, connection_server);
       currentRequest->next_request = nextRequest;
       nextRequest->next_request = NULL;
 #ifdef FLEXUS
@@ -391,7 +396,8 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
     } else {
       //It's a get
       op = GET;
-      request = createRequest(op, conn, worker, key, value, TYPE_GET);
+
+      request = createRequest(op, conn, worker, key, value, TYPE_GET, connection_server);
       request->next_request = NULL;
 #ifdef FLEXUS
       MAGIC2(210, request->header.opaque);	
@@ -416,7 +422,8 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
     value = malloc(sizeof(char) * valueSize);
     memset(value, 'a', sizeof(char) * valueSize);
     value[valueSize-1] = '\0';
-    request = createRequest(op, conn, worker, key, value, TYPE_SET);
+    
+    request = createRequest(op, conn, worker, key, value, TYPE_SET, connection_server);
     request->next_request = NULL;
 #ifdef FLEXUS
     MAGIC2(220, request->header.opaque);	

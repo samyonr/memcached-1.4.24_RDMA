@@ -12,8 +12,8 @@
 
 #define DEBUG_READ_WRITE 0
 struct worker;
-void writeBlock(int fd, void* buffer, int writeSize);
-void readBlock(int fd, void* buffer, int readSize);
+int writeBlock(int fd, void* buffer, int writeSize);
+int readBlock(int fd, void* buffer, int readSize);
 
 char* nslookup(char* hostname);
 void timingTests();

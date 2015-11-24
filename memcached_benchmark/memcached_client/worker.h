@@ -17,13 +17,24 @@
 #define QUEUE_SIZE 1000000
 #define INCR_FIX_QUEUE_SIZE 1000
 
+extern pthread_mutex_t move_connection_lock;
+
+struct event_map {
+  struct event *event_receive;
+  int fd;
+  struct event *event_send;
+};
+
 struct worker {
   
   struct config* config;
-
   pthread_t thread;
+  struct event_map* event_map;
+  int nEvents;
   struct event_base* event_base;
   struct conn** connections;
+  int* connection_server;
+  int* connection_server_variant;
   int nConnections;
   int cpu_num;
   struct timeval last_write_time;
@@ -54,6 +65,9 @@ void workerLoop(struct worker* worker);
 void createWorkers(struct config* config);
 struct worker* createWorker(struct config* config, int cpuNum);
 int pushRequest(struct worker* worker, struct request* request);
-
+void createEvents(int server, struct worker* worker);
+void deleteEvents(int fd, struct event_map* event_map, int nEvents);
+int sendWorkerRequest(struct request* request,struct worker* worker, int iteration);
+int sendWorkerRequest_sendCallback(struct request* request,struct worker* worker, int iteration);
 
 #endif

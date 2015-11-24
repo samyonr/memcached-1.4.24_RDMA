@@ -63,6 +63,8 @@ struct udp_header {
 struct request{
   struct request_header header;
   struct conn* connection;
+  int connection_server;
+  int server_variant;
   struct worker* worker;
   char* extras;
   char* key;
@@ -78,9 +80,9 @@ struct request{
 };
 
 
-struct request* createRequest(int requestType, struct conn* conn, struct worker* worker, char* key, char* value, int type);
-void sendRequest(struct request* request);
-void tcpSendRequest(struct request* request);
+struct request* createRequest(int requestType, struct conn* conn, struct worker* worker, char* key, char* value, int type, int connection_server);
+int sendRequest(struct request* request, int *old_sock);
+void tcpSendRequest(struct request* request, int *conn_err, int *old_sock);
 void udpSendRequest(struct request* request);
 void receiveRequest(struct request* request);
 void deleteRequest(struct request* request);

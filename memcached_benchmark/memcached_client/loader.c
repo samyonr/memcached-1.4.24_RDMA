@@ -4,6 +4,8 @@
 //Protocol based on http://code.google.com/p/memcached/wiki/MemcacheBinaryProtocol
 
 #include "loader.h"
+#include <signal.h>
+
 
 int verbose;
 
@@ -76,6 +78,10 @@ struct config* parseArgs(int argc, char** argv) {
   for(i=0; i<MAX_SERVERS; i++){
     config->server_port[i]=MEMCACHED_PORT;
     config->server_ip_address[i]=NULL;
+    config->server_port_backup[i]=MEMCACHED_PORT;
+    config->server_ip_address_backup[i]=NULL;
+    config->server_port_backup_2[i]=MEMCACHED_PORT;
+    config->server_ip_address_backup_2[i]=NULL;
   }
 
   int c;
@@ -178,8 +184,8 @@ struct config* parseArgs(int argc, char** argv) {
         config->rps = atoi(optarg);
         break;
 
-      case 's':
-        config->server_file=calloc(strlen(optarg)+1, sizeof(char));
+      case 's':        
+	config->server_file=calloc(strlen(optarg)+1, sizeof(char));
         strcpy(config->server_file, optarg);
 
         break;
@@ -224,15 +230,39 @@ void loadServerFile(struct config* config){
   }
   char lineBuffer[1024]; 
   int i=0;
-  while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
+  char *return_val;
+  //while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
+  for(i = 0; i<1; i++) {
+    return_val = fgets(lineBuffer, sizeof(lineBuffer), file);
+	printf("debug: return value %s\n",return_val);
+    printf("debug: got line %s\n",lineBuffer);
+
     char* ipaddress = nslookup(strtok(lineBuffer, " ,\n"));
-    config->server_port[i]=atoi(strtok(NULL, " ,\n"));
+    config->server_port[i]=atoi(strtok(NULL, " ,\n"));    
+    printf("debug: port - %d\n",config->server_port[i]);
     config->server_ip_address[i]=calloc(strlen(ipaddress)+1, sizeof(char));
-    strcpy(config->server_ip_address[i], ipaddress);   
-    i++;
+    strcpy(config->server_ip_address[i], ipaddress);  
+    printf("debug: ipaddress - %s\n", config->server_ip_address[i]); 
+
+    char* ipaddress_2 = nslookup(strtok(NULL, " ,\n"));
+    config->server_port_backup[i]=atoi(strtok(NULL, " ,\n"));    
+    printf("debug: port backup - %d\n",config->server_port_backup[i]);
+    config->server_ip_address_backup[i]=calloc(strlen(ipaddress_2)+1, sizeof(char));
+    strcpy(config->server_ip_address_backup[i], ipaddress_2);  
+    printf("debug: ipaddress backup - %s\n", config->server_ip_address_backup[i]); 
+
+    char* ipaddress_3 = nslookup(strtok(NULL, " ,\n"));
+    config->server_port_backup_2[i]=atoi(strtok(NULL, " ,\n"));    
+    printf("debug: port backup 2 - %d\n",config->server_port_backup_2[i]);
+    config->server_ip_address_backup_2[i]=calloc(strlen(ipaddress_3)+1, sizeof(char));
+    strcpy(config->server_ip_address_backup_2[i], ipaddress_3);  
+    printf("debug: ipaddress backup 2 - %s\n", config->server_ip_address_backup_2[i]); 
+  //  i++;
+
   }
   fclose(file);
   config->n_servers=i;
+  printf("debug: n_servers %d\n",config->n_servers);
 }
 
 //Prints the configuration
@@ -270,6 +300,7 @@ void setupLoad(struct config* config) {
     exit(-1);	
   }
   loadServerFile(config);
+  printf("debug: server file loaded%d\n",1);
 
   if(config->n_workers % config->n_servers != 0){
    printf("Number of client (worker) threads must be divisible by the number of servers\n");
@@ -281,13 +312,19 @@ void setupLoad(struct config* config) {
    exit(-1);	
   }
   
-  if(!config->pre_load || (config->scaling_factor==1)) config->dep_dist = loadDepFile(config);
-  else config->dep_dist = loadAndScaleDepFile(config);
-  
+  if(!config->pre_load || (config->scaling_factor==1))
+  {
+     config->dep_dist = loadDepFile(config);
+  }
+  else 
+  {
+     config->dep_dist = loadAndScaleDepFile(config);
+  }  
 
   if(config->value_size_dist == NULL){
     config->value_size_dist = createUniformDistribution(1, 1024); 
   }
+
   if(config->key_pop_dist == NULL){
     config->key_pop_dist = createUniformDistribution(0, config->n_keys -1);
     printf("created uniform distribution %d\n", config->n_keys);
@@ -295,11 +332,9 @@ void setupLoad(struct config* config) {
     config->n_keys = CDF_VALUES;
   }
   config->key_list = generateKeys(config);
-  
   if(config->multiget_dist == NULL) {
     config->multiget_dist = createUniformDistribution(2, 10);
   }
-
   printf("rps %d cpus %d\n", config->rps, config->n_workers);
   if (config->rps == -1 || config->rps == 0)
       return;
@@ -332,10 +367,13 @@ void cleanUp(struct config* config) {
 int main(int argc, char** argv){
   
   struct config* config = parseArgs(argc, argv);
+  signal (SIGPIPE, SIG_IGN);
   printConfiguration(config);
-
+  printf("debug: conf printed%d\n",1);
   setupLoad(config);
+  printf("debug: setup loaded%d\n",1);
   createWorkers(config);
+  printf("debug: workers created%d\n",1);
   statsLoop(config);
   return 0;
 

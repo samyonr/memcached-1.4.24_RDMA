@@ -107,9 +107,9 @@ void printGlobalStats(struct config* config) {
   double q95 = findQuantile(&global_stats.response_time, .95);
   double q99 = findQuantile(&global_stats.response_time, .99);
 
-  printf("%10s,%8s,%16s, %8s,%11s,%10s,%13s,%10s,%10s,%10s,%12s,%10s,%10s,%11s,%14s\n", "timeDiff", "rps", "requests", "gets", "sets",  "hits", "misses", "avg_lat", "90th", "95th", "99th", "std", "min", "max", "avgGetSize");
-  printf("%10f, %9.1f,  %10d, %10d, %10d, %10d, %10d, %10f, %10f, %10f, %10f, %10f, %10f, %10f, %10f\n", 
-		timeDiff, rps, global_stats.requests, global_stats.gets, global_stats.sets, global_stats.hits, global_stats.misses,
+  printf("%10s,%8s,%16s, %8s,%11s,%10s,%13s,%13s,%10s,%10s,%10s,%12s,%10s,%10s,%11s,%14s\n", "timeDiff", "rps", "requests", "gets", "sets",  "hits", "misses","complete_misses", "avg_lat", "90th", "95th", "99th", "std", "min", "max", "avgGetSize");
+  printf("%10f, %9.1f,  %10d, %10d, %10d, %10d, %10d, %10d, %10f, %10f, %10f, %10f, %10f, %10f, %10f, %10f\n", 
+		timeDiff, rps, global_stats.requests, global_stats.gets, global_stats.sets, global_stats.hits, global_stats.misses,global_stats.complete_misses,
 		1000*getAvg(&global_stats.response_time), 1000*q90, 1000*q95, 1000*q99, 1000*std, 1000*global_stats.response_time.min, 1000*global_stats.response_time.max, getAvg(&global_stats.get_size));
   int i;
   printf("Outstanding requests per worker:\n");
@@ -141,8 +141,9 @@ void statsLoop(struct config* config) {
   while(1) {
     printGlobalStats(config);
     sleep(config->stats_time);
+    //sleep(1000 * 60);
   }//End while()
-
+  printf("bye\n");
 
 }//End statisticsLoop()
 

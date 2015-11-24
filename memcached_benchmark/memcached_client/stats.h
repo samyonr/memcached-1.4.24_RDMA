@@ -45,6 +45,7 @@ struct memcached_stats {
   int sets;
   int hits;
   int misses;
+  int complete_misses;
   int multi_gets;
   int incrs;
   int adds;

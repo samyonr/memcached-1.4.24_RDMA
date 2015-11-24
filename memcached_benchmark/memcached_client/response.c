@@ -3,12 +3,12 @@
 #include "m5op.h"
 #endif
 
-void receiveResponse(struct request* request, double difftime) {
+int receiveResponse(struct request* request, double difftime, int *old_sock) {
 
   struct request* currentRequest = request;
   int finalRequest = 0;
-//  printf("entered receiveResponse\n"); 
   int notFound = 0;
+  int conn_err = 0;
   while(currentRequest != NULL && notFound == 0){
     if(currentRequest->next_request == NULL){
       finalRequest = 1;
@@ -17,16 +17,27 @@ void receiveResponse(struct request* request, double difftime) {
     }
     if(request->connection->protocol == TCP_MODE){
   //    printf("receiving request final? %d\n", finalRequest);
-      notFound = tcpReceiveResponse(request,finalRequest, difftime);
+      notFound = tcpReceiveResponse(request,finalRequest, difftime, &conn_err, old_sock);
+      if (conn_err == 1)
+	  {
+		//printf("connection error happend\n");
+	  }
     } else if(request->connection->protocol == UDP_MODE){
       notFound = udpReceiveResponse(request,finalRequest, difftime);
     } else {
       printf("Undefined protocol\n");
       exit(-1);
     }
-    currentRequest = currentRequest->next_request;
-  }//End while()
 
+    currentRequest = currentRequest->next_request;
+    if (notFound == 0)
+    {
+
+      printf("repeating last request\n");
+      return -1;
+    }
+  }//End while()
+  return 1;
 }//End receiveResponse()
 
 int udpReceiveResponse(struct request* request, int final, double difftime) {
@@ -45,6 +56,8 @@ int udpReceiveResponse(struct request* request, int final, double difftime) {
 
   char* ptr = dataGramBuffer;
   char udpHeader[8];
+
+
   memcpy(&udpHeader, ptr, 8);
   ptr += 8;
 
@@ -99,12 +112,85 @@ int udpReceiveResponse(struct request* request, int final, double difftime) {
 }//End udpReceiveResponse()
 
 
-int tcpReceiveResponse(struct request* request, int final, double difftime) {
+int tcpReceiveResponse(struct request* request, int final, double difftime, int *conn_err, int *old_sock) {
 
   struct response_header response_header;
   int fd = request->connection->sock;
-  readBlock(fd, &response_header, sizeof(response_header));
+  
+  int server = request->connection_server;
+  if (request->next_request != NULL)
+  {
+    printf("receive ohhhhhhhh noooooooooooooooooooooooooooooo\n");
+  }
+  if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+  {
+     printf("server number %d, fd %d, server fd %d, on respose. how that's possible? request variant %d, worker variant %d\n", server, request->connection->sock, request->worker->connections[server]->sock,
+          request->server_variant, request->worker->connection_server_variant[server]); 
+     request->server_variant++;
+     request->connection = request->worker->connections[server];
+     *conn_err = 1;
+    return 0;
+     //exit(-1);
+  }
 
+  int read_status = readBlock(fd, &response_header, sizeof(response_header));
+  if (read_status == -1)
+  {
+      int a =pthread_mutex_lock(&move_connection_lock);
+      printf("response - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
+      *conn_err = 1;
+      if (request->server_variant != request->worker->connection_server_variant[server]) //someone already handeled the variant
+      {
+         printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
+         request->server_variant++;       
+         return 0;
+      }
+
+
+	  //deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
+      printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
+      *old_sock = request->connection->sock;
+      
+	  if (request->worker->connection_server_variant[server] != 2)
+      {
+         request->worker->connection_server_variant[server]++;
+         printf("server number %d: moving to variant %d \n", server, request->worker->connection_server_variant[server]);
+         if (request->worker->connection_server_variant[server] == 1)
+         {
+            printf("server number %d: setting connection. old addrss - %s, new address - %s, old port - %d, new port - %d\n",
+					server ,request->worker->config->server_ip_address[0] ,
+					request->worker->config->server_ip_address_backup[0], 
+					request->worker->config->server_port[0],request->worker->config->server_port_backup[0]);
+	        request->worker->connections[server] = createConnection(request->worker->config->server_ip_address_backup[0], 
+				  												    request->worker->config->server_port_backup[0], 
+					  											    request->worker->config->protocol_mode, 
+																    request->worker->config->naggles);
+            printf("server number %d: new connection set\n", server);
+		    printf("server number %d: previous sock: %d, new sock: %d\n",server, request->connection->sock, request->worker->connections[server]->sock);
+            request->connection = request->worker->connections[server];
+            request->server_variant++;
+            createEvents(server, request->worker);
+         }
+         else if (request->worker->connection_server_variant[server] == 2)
+         {
+            printf("!!!!!!!!!!!!!!!!!!!!!! TRYING SECOND BACKUP for server number %d\n", server);
+	        request->worker->connections[server] = createConnection(request->worker->config->server_ip_address_backup_2[0], 
+																    request->worker->config->server_port_backup_2[0], 
+																    request->worker->config->protocol_mode, 
+																    request->worker->config->naggles);
+            request->connection = request->worker->connections[server];
+       }
+       else
+       {
+          printf("connection server variant is not in range\n");
+          exit(-1);
+       }
+       printf("response - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
+       int b = pthread_mutex_unlock(&move_connection_lock);
+       printf("response - 2. server number %d: lock free. fd %d status %d\n",server, request->connection->sock,b);
+    }
+    return 0;
+  }
   //Check the magic number is correct
   if(response_header.magic != MAGIC_RESPONSE) {
     printf("On read Incorrect magic number: %x should be: %x\n", response_header.magic, MAGIC_RESPONSE);
@@ -142,7 +228,11 @@ int tcpReceiveResponse(struct request* request, int final, double difftime) {
   readBlock(fd, key, keySize);
   key[keySize] = '\0';
 
-  readBlock(fd, value, valueSize);
+  int read_status2 = readBlock(fd, value, valueSize);
+  if (read_status2 == -1 )
+  {
+     printf("TOTALY MISSED THAT\n");
+  }
 
   value[valueSize] = '\0';
   struct response response;
@@ -180,7 +270,7 @@ int processResponse(struct response* response, int final, double difftime){
     char* key = response->request->key;
     struct worker* worker = response->request->worker;
     struct conn* conn = response->request->connection;
-    struct request* request = createRequest(op, conn, worker, key, 0, type);
+    struct request* request = createRequest(op, conn, worker, key, 0, type, response->request->connection_server);
     request->next_request = NULL;
     if( ((worker->incr_fix_queue_tail + 1) % INCR_FIX_QUEUE_SIZE) == worker->incr_fix_queue_head) {
       printf("I was hoping this would never happen\n");
@@ -277,7 +367,7 @@ void checkError(int errorCode, char* key, char* value){
       break;
 
     case OUT_OF_MEMORY:
-      printf("Out of memory\n%s\n", value);
+      //printf("Out of memory\n%s\n", value);
       return;
       break;
 
