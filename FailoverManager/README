@@ -1,0 +1,3 @@
+Worker that copies Memcached's data between two servers. Works with Memcached_RDMA.
+
+Usage will be added soon.
