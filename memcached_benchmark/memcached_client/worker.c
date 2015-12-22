@@ -1,6 +1,5 @@
 #include "worker.h"
 
-pthread_mutex_t move_connection_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void* workerFunction(void* arg) {
 
@@ -165,14 +164,7 @@ void sendCallback(int fd, short eventType, void* args) {
 		return;
 	}
 	//sendWorkerRequest_sendCallback(request,worker, 0);
-	int old_sock = 0;
-	/*
-	if(fd > 15)
-	{
-		printf("sending request with fd %d\n", fd);
-	}
-	*/
-	int sendResult = sendRequest(request, &old_sock);
+	int sendResult = sendRequest(request);
 	if (sendResult == -1) {
 		printf("send request returned -1\n");
 		// deleteRequest(request);
@@ -181,12 +173,11 @@ void sendCallback(int fd, short eventType, void* args) {
 
 int sendWorkerRequest_sendCallback(struct request* request,struct worker* worker, int iteration)
 {
-	int old_sock = 0;
 	if (iteration > 0)
 	{
 		printf("sendWorkerRequest_sendCallback, fd %d. iteration %d\n", request->connection->sock,iteration);
 	}
-	int sendResult = sendRequest(request, &old_sock);
+	int sendResult = sendRequest(request);
 	if (sendResult == -1 && iteration != 3)
 	{
 		printf("Resending again %d\n",iteration+1);
@@ -203,9 +194,8 @@ int sendWorkerRequest_sendCallback(struct request* request,struct worker* worker
 
 int sendWorkerRequest_receiveCallback(struct request* request,struct worker* worker, int iteration)
 {
-	int old_sock = 0;
 	printf("sendWorkerRequest_receiveCallback, fd %d. iteration %d\n", request->connection->sock,iteration);
-	int sendResult = sendRequest(request, &old_sock);
+	int sendResult = sendRequest(request);
 	if (sendResult == -1 && iteration != 3)
 	{
 		//deleteRequest(request);
@@ -246,8 +236,7 @@ void receiveCallback(int fd, short eventType, void* args) {
 	timersub(&readTimestamp, &(request->send_time), &timediff);
 	double diff = timediff.tv_usec * 1e-6  + timediff.tv_sec;
 
-	int old_sock = 0;
-	int result = receiveResponse(request, diff, &old_sock);
+	int result = receiveResponse(request, diff);
 	if (result == -1)
 	{
 		printf("receive Response returned -1\n");

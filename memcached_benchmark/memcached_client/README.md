@@ -13,7 +13,6 @@ Known Issues:
 - 'fget' does not work correctly, therefore all the while-loops that read the files where commented out.
 - In order of failover to work, all connections must TX at least once before server goes down.
 - "total misses" is always 0
-- There is a global mutex for the failover. It's slow and should be changed to a mutex per connection.
 - There is a scenario on which a mutex's lock is not freed. There is a comment about it in the right place in the code.
 - There is a lot of logs during reconnection.
 - On read response, there is a missed place with possible read from socket - the program can fail there.

@@ -40,9 +40,9 @@ struct response {
   int value_size;
 };
 
-int receiveResponse(struct request* request, double difftime, int *old_sock);
+int receiveResponse(struct request* request, double difftime);
 int udpReceiveResponse(struct request* request, int final, double difftime);
-int tcpReceiveResponse(struct request* request, int final, double difftime, int* conn_err, int *old_sock);
+int tcpReceiveResponse(struct request* request, int final, double difftime, int* conn_err);
 int processResponse(struct response* response, int final, double difftime);
 
 void checkError(int errorCode, char* key, char* value);

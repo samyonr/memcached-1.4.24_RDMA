@@ -3,7 +3,7 @@
 #include "m5op.h"
 #endif
 
-int receiveResponse(struct request* request, double difftime, int *old_sock) {
+int receiveResponse(struct request* request, double difftime) {
 
 	struct request* currentRequest = request;
 	int finalRequest = 0;
@@ -17,7 +17,7 @@ int receiveResponse(struct request* request, double difftime, int *old_sock) {
 		}
 		if(request->connection->protocol == TCP_MODE){
 			// printf("receiving request final? %d\n", finalRequest);
-			notFound = tcpReceiveResponse(request,finalRequest, difftime, &conn_err, old_sock);
+			notFound = tcpReceiveResponse(request,finalRequest, difftime, &conn_err);
 			if (conn_err == 1)
 			{
 				//printf("connection error happend\n");
@@ -111,7 +111,7 @@ int udpReceiveResponse(struct request* request, int final, double difftime) {
 }//End udpReceiveResponse()
 
 
-int tcpReceiveResponse(struct request* request, int final, double difftime, int *conn_err, int *old_sock) {
+int tcpReceiveResponse(struct request* request, int final, double difftime, int *conn_err) {
 
 	struct response_header response_header;
 	int fd = request->connection->sock;
@@ -142,16 +142,10 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 	int read_status = readBlock(fd, &response_header, sizeof(response_header));
 	if (read_status == -1)
 	{
-		int a = pthread_mutex_lock(&move_connection_lock);
-		printf("response - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
 		*conn_err = 1;
 		if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
 		{
-			printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
-			request->server_variant++;
-			printf("response short - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-			int b = pthread_mutex_unlock(&move_connection_lock);
-			printf("response short - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);       
+			printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);   
 			return 0;
 		}
 		else if (request->server_variant > request->worker->connection_server_variant[server])
@@ -163,7 +157,6 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 
 		//deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
 		printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
-		*old_sock = request->connection->sock;
       
 		int changeServerRes = changeServer(request, server);
 		if (changeServerRes == 1)
@@ -175,9 +168,6 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 			printf("connection server variant is not in range\n");
 			exit(-1);
 		}
-		printf("response - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-		int b = pthread_mutex_unlock(&move_connection_lock);
-		printf("response - 2. server number %d: lock free. fd %d status %d\n",server, request->connection->sock,b);
 		return 0;
 	}
 	//Check the magic number is correct

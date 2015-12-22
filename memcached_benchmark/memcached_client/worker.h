@@ -72,12 +72,14 @@ void* workerFunction(void* arg);
 void workerLoop(struct worker* worker);
 void createWorkers(struct config* config);
 struct worker* createWorker(struct config* config, int cpuNum);
+
 int pushRequest(struct worker* worker, struct request* request);
 void createEvents(int server, struct worker* worker, int variant);
 void deleteEvents(int fd, struct event_map* event_map, int nEvents);
 int sendWorkerRequest_receiveCallback(struct request* request,struct worker* worker, int iteration);
 int sendWorkerRequest_sendCallback(struct request* request,struct worker* worker, int iteration);
 int changeServer(struct request* request, int server);
+
 void increaseOrDeleteEventsNullCounter(int fd, struct worker* worker, int nEvents);
 void increaseEventsLiveSendEvCounter(int fd, struct worker* worker, int nEvents);
 void increaseEventsLiveReceiveEvCounter(int fd, struct worker* worker, int nEvents);
