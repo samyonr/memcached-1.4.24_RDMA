@@ -51,15 +51,14 @@ void tcpSendRequest(struct request* request, int *conn_err) {
 	}
 	if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
 	{
-		printf("server number %d, fd %d. on send request. updating variant and connection\n", server, request->connection->sock);
-		//request->server_variant++;
-		//request->connection = request->worker->connections[server];
+		printf("server number %d, fd %d. on send request. request for old connection\n", server, request->connection->sock);
 		*conn_err = 1;
 		return;
 	}
 	else if (request->server_variant > request->worker->connection_server_variant[server])
 	{
-		printf("1) tcpSendRequest. request->server_variant > request->worker->connection_server_variant[server]\n");
+		//should never happen
+		printf("tcpSendRequest. request->server_variant > request->worker->connection_server_variant[server]\n");
 		exit(-1);
 	}
 #ifdef GEM5
@@ -88,7 +87,7 @@ void tcpSendRequest(struct request* request, int *conn_err) {
 
 			gettimeofday(&request->send_time, NULL);
 
-			printf("2) tcpSendRequest. sending request (writing block) for server %d, port %d, sock %d\n",request->connection_server,request->connection->port, request->connection->sock);
+			printf("1) tcpSendRequest. sending request (writing block) for server %d, port %d, sock %d\n",request->connection_server,request->connection->port, request->connection->sock);
  			int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
       
 			free(oneBigPacket);
@@ -138,16 +137,15 @@ void tcpSendRequest(struct request* request, int *conn_err) {
 			*conn_err = 1;
 			if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
 			{
-				printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
+				printf("server number %d, fd %d. request for old connection performed write attempt\n", server, request->connection->sock);
 				return;
 			}
 			else if (request->server_variant > request->worker->connection_server_variant[server])
 			{
-				printf("request->server_variant > request->worker->connection_server_variant[server]\n");
+				//should never happen
+				printf("2) request->server_variant > request->worker->connection_server_variant[server]\n");
 				exit(-1);
 			}
-
-			//deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
 			printf("server number %d: had write error on fd %d\n", server, request->connection->sock);
 	
 			int changeServerRes = changeServer(request, server);

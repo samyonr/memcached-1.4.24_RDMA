@@ -98,7 +98,7 @@ double findQuantile(struct stat* stat, double quantile) {
 
 void printGlobalStats(struct config* config) {
 
-  //pthread_mutex_lock(&stats_lock);
+  pthread_mutex_lock(&stats_lock);
   struct timeval currentTime;
   gettimeofday(&currentTime, NULL);
   double timeDiff = currentTime.tv_sec - global_stats.last_time.tv_sec + 1e-6*(currentTime.tv_sec - global_stats.last_time.tv_sec);
@@ -124,7 +124,7 @@ void printGlobalStats(struct config* config) {
   global_stats.last_time = currentTime;
 
   checkExit(config);
-  //pthread_mutex_unlock(&stats_lock);
+  pthread_mutex_unlock(&stats_lock);
 
 }//End printGlobalStats()
 
@@ -132,9 +132,9 @@ void printGlobalStats(struct config* config) {
 //Print out statistics every second
 void statsLoop(struct config* config, int numOfThreads) {
   int i;
-  //pthread_mutex_lock(&stats_lock);
+  pthread_mutex_lock(&stats_lock);
   gettimeofday(&start_time, NULL);
-  //pthread_mutex_unlock(&stats_lock);
+  pthread_mutex_unlock(&stats_lock);
 
   sleep(2);
   printf("Stats:\n");

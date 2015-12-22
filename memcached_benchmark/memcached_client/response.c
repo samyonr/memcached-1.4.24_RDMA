@@ -123,18 +123,13 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 	}
 	if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
 	{
-		printf("server number %d, fd %d, on respose. how that's possible? request variant %d, worker variant %d\n", server, request->connection->sock,
-			request->server_variant, request->worker->connection_server_variant[server]); 
-		//printf("server number %d, fd %d, server fd %d, on respose. how that's possible? request variant %d, worker variant %d\n", server, request->connection->sock, request->worker->connections[server]->sock,
-		//	request->server_variant, request->worker->connection_server_variant[server]); 
-		//request->server_variant++;
-		//request->connection = request->worker->connections[server];
+		printf("server number %d, fd %d. on receive response. response of old connection\n", server, request->connection->sock); 
 		*conn_err = 1;
-		return 0;
-		//exit(-1);
+		return 0; //return error
 	}
 	else if (request->server_variant > request->worker->connection_server_variant[server])
 	{
+		//should never happen
 		printf("1) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
 		exit(-1);
 	}
@@ -145,17 +140,16 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 		*conn_err = 1;
 		if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
 		{
-			printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);   
-			return 0;
+			printf("server number %d, fd %d. on receive response. response of old connection performed read attempt\n", server, request->connection->sock); 
+			return 0; //return error
 		}
 		else if (request->server_variant > request->worker->connection_server_variant[server])
 		{
+			//should never happen
 			printf("2) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
 			exit(-1);
  		}
 
-
-		//deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
 		printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
       
 		int changeServerRes = changeServer(request, server);
@@ -168,7 +162,7 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 			printf("connection server variant is not in range\n");
 			exit(-1);
 		}
-		return 0;
+		return 0; //return error
 	}
 	//Check the magic number is correct
 	if(response_header.magic != MAGIC_RESPONSE) {
@@ -211,6 +205,7 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 	if (read_status2 == -1 )
 	{
 		printf("TOTALY MISSED THAT\n");
+		exit(-1); //from some reason, it never happend
 	}
 
 	value[valueSize] = '\0';
@@ -261,7 +256,7 @@ int processResponse(struct response* response, int final, double difftime){
 
 
   //Update stats
-  //pthread_mutex_lock(&stats_lock);
+  pthread_mutex_lock(&stats_lock);
 
   global_stats.ops++;
   //Check if this was a hit or miss
@@ -282,7 +277,7 @@ int processResponse(struct response* response, int final, double difftime){
   }
 
   if(!(errorCode == 1 || final == 1)){
-    //pthread_mutex_unlock(&stats_lock);
+    pthread_mutex_unlock(&stats_lock);
     return 0;
   }
 
@@ -301,7 +296,7 @@ int processResponse(struct response* response, int final, double difftime){
 
   addSample(&global_stats.response_time, difftime);
 
-  //pthread_mutex_unlock(&stats_lock);
+  pthread_mutex_unlock(&stats_lock);
 
   return 1;
 
