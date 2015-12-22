@@ -1,11 +1,13 @@
 Memcached's client for benchmarking and testing.
 
-The innovation in the following client is that if a connection with Memcached's server is lost, the client tries to continue the caching (both sending and retrieving data) with another server, and if it also fails, then it tries to continue with a third server. That means that if the data is backed up in another two servers, the client can continue to work seamlessly (with only a small delay for establishing new connection), without adding cache misses.
+The innovation in the following client-benchmark is that it's failure resistant. In case a connection with Memcached's server is lost, the client tries to continue the caching (both sending and retrieving data) from another server (or reconnecting to the same server, configuration depending). Connection failure can happen twice - if the second connection also fails, then the client tries to continue with a third server. That means that if the data is backed up in other server (up to two servers), the client can continue to work seamlessly (with only a small delay for establishing new connection), without adding cache misses.
 
-The benchmark shows regular cache misses, together with total misses - i.e. the misses that happen when the server falls, and the relevant data is not yet backed up in another server.
+The benchmark shows regular cache misses, together with total misses - i.e. the misses that happen when server falls, and the relevant data is not yet backed up in another server.
 
-The following client is a modification of CloudSuite's client, and those is distributed under the same licence. Please see the licence below.
-The modification of CloudSuite's client was developed by Samyon Ristov at Hebrew University of Jerusalem, under the supervision of Prof. Danny Dolev, Tal Anker and Yaron Weinsberg.
+See memcached_client's README for more details about how the client works, its features and known issues.
+
+The following client is a modification of CloudSuite's client, and therefore its distributed under the same licence. Please see the licence below.
+The modification of CloudSuite's client was developed by Samyon Ristov from Hebrew University of Jerusalem, under the supervision of Prof. Danny Dolev, Tal Anker and Yaron Weinsberg.
 
 Original benchmark:
 http://parsa.epfl.ch/cloudsuite/memcached.html
