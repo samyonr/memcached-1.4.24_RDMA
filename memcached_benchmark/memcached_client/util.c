@@ -127,16 +127,7 @@ int writeBlock(int fd, void* buffer, int writeSize) {
 	}
 	printf("\n");
 #endif
-	//int i = 0;
-	//int happend = 0;
-	/*
-  	if(fd > 15)
-	{
-		printf("sending request with fd %d, starting loop, want to write %d bytes\n", fd,writeSize);
-	}
-	*/
 	while(nWriteTotal != writeSize){
-		//i++;
 		nWrite = write(fd, buffer + nWriteTotal, writeSize - nWriteTotal);
 		if(nWrite <= 0) {
 			printf("Write error: %d\n", nWrite);
@@ -145,21 +136,7 @@ int writeBlock(int fd, void* buffer, int writeSize) {
 			return -1;
 		}
 		nWriteTotal += nWrite;
-		//if (i % 10000000 == 0) { printf("oooooooooommmmmmmmmmmmmmmmggggggggggggg!!!!!!!!!!!!!!!\n"); happend = 1; }
-		//if (i % 10000000 == 0) { printf("nWrite = %d, nWriteTotal = %d, writeSize = %d\n",nWrite, nWriteTotal, writeSize); }
-		/*	
-		if (happend == 1 && nWrite != 0)
-		{
-			printf("how? nWrite = %d, nWriteTotal = %d, writeSize = %d ##################################################################\n",nWrite, nWriteTotal,writeSize);
-		}
-		*/
 	}
-	/*
-  	if(fd > 15)
-	{
-		printf("sending request with fd %d, ending loop\n", fd);
-	}
-	*/
 	if(nWriteTotal != writeSize){
 		printf("Write block failed\n");
 		exit(-1);
@@ -188,16 +165,7 @@ int readBlock(int fd, void* buffer, int readSize) {
 
 	int nReadTotal = 0;
 	int nRead = 0;
-	//int i = 0;
-	//int happend = 0;
-	/*  	
-	if(fd > 15)
-	{
-		printf("receiving response with fd %d, starting loop, want to read %d bytes\n", fd, readSize);
-	}
-	*/
 	while(nReadTotal != readSize){
-		//i++;
 	
 		rv = select(fd + 1, &set, NULL, NULL, &timeout);
 		if(rv == -1)
@@ -213,33 +181,20 @@ int readBlock(int fd, void* buffer, int readSize) {
 			printf("timeout\n"); /* a timeout occured */
 			printf("error occured during reading in select timeout fd %d\n", fd);
 			printf("wanted to read readSize=%d, successed only nReadTotal=%d, timeout occured\n",readSize, nReadTotal);
-			exit(-1);
-			return -1;
+			exit(-1); //not sure how to deal with timeouts yet - does it necessarily means the server went down?
+			//return -1;
 		}
-		//else
-    	nRead = read(fd, buffer + nReadTotal, readSize - nReadTotal);
+		else
+		{
+    		nRead = read(fd, buffer + nReadTotal, readSize - nReadTotal);
+		}
     	if(nRead <= 0) {
 			printf("error occured during reading fd %d\n", fd);
 			return -1;
 			//exit(-1);
 		}
 		nReadTotal += nRead;
-		/*
-		if (i % 1000 == 0) { printf("oooooooooommmmmmmmmmmmmmmmggggggggggggg!!!!!!!!!!!!!!!\n"); happend = 1; }
-		if (i % 1000 == 0) { printf("nRead = %d, nReadTotal = %d, readSize = %d\n",nRead, nReadTotal, readSize); }
-		if (happend == 1 && nRead != 0)
-		{
-			printf("how? nRead = %d, nReadTotal = %d, readSize = %d ##################################################################\n",nRead, nReadTotal,readSize);
-		}
-		*/
 	}
-	/*  	
-	if(fd > 15)
-	{
-		printf("receiving response with fd %d, ending loop\n", fd);
-	}
-	*/
-	//if (happend == 1) { printf("WHY IM HERE???????????????????????????????????? nReadTotal = %d, nRead = %d, ReadSize = %d\n", nReadTotal, nRead,readSize); }
 #if DEBUG_READ_WRITE
 	printf("Reading:\n");
 	int i;

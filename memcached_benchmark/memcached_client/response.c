@@ -5,39 +5,38 @@
 
 int receiveResponse(struct request* request, double difftime, int *old_sock) {
 
-  struct request* currentRequest = request;
-  int finalRequest = 0;
-  int notFound = 0;
-  int conn_err = 0;
-  while(currentRequest != NULL && notFound == 0){
-    if(currentRequest->next_request == NULL){
-      finalRequest = 1;
-    } else {
-      finalRequest = 0;
-    }
-    if(request->connection->protocol == TCP_MODE){
-  //    printf("receiving request final? %d\n", finalRequest);
-      notFound = tcpReceiveResponse(request,finalRequest, difftime, &conn_err, old_sock);
-      if (conn_err == 1)
-	  {
-		//printf("connection error happend\n");
-	  }
-    } else if(request->connection->protocol == UDP_MODE){
-      notFound = udpReceiveResponse(request,finalRequest, difftime);
-    } else {
-      printf("Undefined protocol\n");
-      exit(-1);
-    }
+	struct request* currentRequest = request;
+	int finalRequest = 0;
+	int notFound = 0;
+	int conn_err = 0;
+	while(currentRequest != NULL && notFound == 0){
+		if(currentRequest->next_request == NULL){
+			finalRequest = 1;
+		} else {
+			finalRequest = 0;
+		}
+		if(request->connection->protocol == TCP_MODE){
+			// printf("receiving request final? %d\n", finalRequest);
+			notFound = tcpReceiveResponse(request,finalRequest, difftime, &conn_err, old_sock);
+			if (conn_err == 1)
+			{
+				//printf("connection error happend\n");
+			}
+		} else if(request->connection->protocol == UDP_MODE){
+			notFound = udpReceiveResponse(request,finalRequest, difftime);
+		} else {
+			printf("Undefined protocol\n");
+			exit(-1);
+		}
 
-    currentRequest = currentRequest->next_request;
-    if (notFound == 0)
-    {
-
-      //printf("repeating last request\n");
-      return -1;
-    }
-  }//End while()
-  return 1;
+		currentRequest = currentRequest->next_request;
+		if (notFound == 0)
+		{
+			//printf("repeating last request\n");
+			return -1;
+		}
+	}//End while()
+	return 1;
 }//End receiveResponse()
 
 int udpReceiveResponse(struct request* request, int final, double difftime) {
@@ -143,7 +142,7 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 	int read_status = readBlock(fd, &response_header, sizeof(response_header));
 	if (read_status == -1)
 	{
-		int a = 0;//pthread_mutex_lock(&move_connection_lock);
+		int a = pthread_mutex_lock(&move_connection_lock);
 		printf("response - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
 		*conn_err = 1;
 		if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
@@ -151,7 +150,7 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 			printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
 			request->server_variant++;
 			printf("response short - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-			int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+			int b = pthread_mutex_unlock(&move_connection_lock);
 			printf("response short - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);       
 			return 0;
 		}
@@ -177,7 +176,7 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 			exit(-1);
 		}
 		printf("response - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-		int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+		int b = pthread_mutex_unlock(&move_connection_lock);
 		printf("response - 2. server number %d: lock free. fd %d status %d\n",server, request->connection->sock,b);
 		return 0;
 	}

@@ -247,12 +247,6 @@ void receiveCallback(int fd, short eventType, void* args) {
 	double diff = timediff.tv_usec * 1e-6  + timediff.tv_sec;
 
 	int old_sock = 0;
-	/*
-  	if(fd > 15)
-	{
-		printf("receiving response with fd %d\n", fd);
-	}
-	*/
 	int result = receiveResponse(request, diff, &old_sock);
 	if (result == -1)
 	{

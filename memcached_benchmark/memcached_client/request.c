@@ -6,40 +6,40 @@
 
 int sendRequest(struct request* request, int *old_sock) {
 
-  //Send out all requests (only one unless multiget
- //// printf("entered sendRequest\n");
-  struct request* sendRequest = request;
-  int conn_err = 0;
-  if(request->connection->protocol == TCP_MODE){
-    tcpSendRequest(sendRequest, &conn_err, old_sock);
-  } else if(request->connection->protocol == UDP_MODE){ 
-    printf("UDP not working\n"); 
-    exit(-1);
-    udpSendRequest(sendRequest);
-  } else {
-    printf("Undefined protocol\n");
-    exit(-1);
-  }
-  //struct request* sendRequest = request;
-  //while(sendRequest != NULL) {
-  ////  printf("request op %d\n", sendRequest->header.opcode);
-  //  if(request->connection->protocol == TCP_MODE){
-  //    tcpSendRequest(sendRequest);
-  //  } else if(request->connection->protocol == UDP_MODE){
-  //    udpSendRequest(sendRequest);
-  //  } else {
-  //    printf("Undefined protocol\n");
-  //    exit(-1);
-  //  }
-  //  sendRequest = sendRequest->next_request;
-  //}//End while
+	//Send out all requests (only one unless multiget
+	// printf("entered sendRequest\n");
+	struct request* sendRequest = request;
+	int conn_err = 0;
+	if(request->connection->protocol == TCP_MODE){
+		tcpSendRequest(sendRequest, &conn_err, old_sock);
+	} else if(request->connection->protocol == UDP_MODE){ 
+		printf("no UDP support\n"); 
+		exit(-1); //current version not supports UDP
+		udpSendRequest(sendRequest);
+	} else {
+		printf("Undefined protocol\n");
+		exit(-1);
+	}
+	//struct request* sendRequest = request;
+	//while(sendRequest != NULL) {
+	////  printf("request op %d\n", sendRequest->header.opcode);
+	//  if(request->connection->protocol == TCP_MODE){
+	//    tcpSendRequest(sendRequest);
+	//  } else if(request->connection->protocol == UDP_MODE){
+	//    udpSendRequest(sendRequest);
+	//  } else {
+	//    printf("Undefined protocol\n");
+	//    exit(-1);
+	//  }
+	//  sendRequest = sendRequest->next_request;
+	//}//End while
 
-  if (conn_err == 1)
-  {
-     printf("tcp returning -1\n");
-     return -1;
-  }
-  return 1;
+	if (conn_err == 1)
+	{
+		printf("tcp returning -1\n");
+		return -1;
+	}
+	return 1;
 }//End sendRequest()
   
 void tcpSendRequest(struct request* request, int *conn_err, int *old_sock) {
@@ -137,7 +137,7 @@ void tcpSendRequest(struct request* request, int *conn_err, int *old_sock) {
 		if (result == -1)
 		{
 
-			int a = 0;//pthread_mutex_lock(&move_connection_lock);
+			int a = pthread_mutex_lock(&move_connection_lock);
  			printf("request - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
 			*conn_err = 1;
 			if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
@@ -145,7 +145,7 @@ void tcpSendRequest(struct request* request, int *conn_err, int *old_sock) {
 				printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
 				request->server_variant++;
 				printf("request short - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-				int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+				int b = pthread_mutex_unlock(&move_connection_lock);
 				printf("request short - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);
 				return;
 			}
@@ -170,7 +170,7 @@ void tcpSendRequest(struct request* request, int *conn_err, int *old_sock) {
 				exit(-1);
 			}
 			printf("request - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-			int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+			int b = pthread_mutex_unlock(&move_connection_lock);
 			printf("request - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);
 		}
 	}
