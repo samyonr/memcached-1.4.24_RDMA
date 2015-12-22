@@ -44,148 +44,136 @@ int sendRequest(struct request* request, int *old_sock) {
   
 void tcpSendRequest(struct request* request, int *conn_err, int *old_sock) {
   
-  struct request* sendRequest = request;
-  int server = request->connection_server;
-  if (request->next_request != NULL)
-  {
-    printf("send ohhhhhhhh noooooooooooooooooooooooooooooo\n");
-  }
-  if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
-  {
-    printf("server number %d, fd %d. on send request. updating variant and connection\n", server, request->connection->sock);
-    request->server_variant++;
-    request->connection = request->worker->connections[server];
-    *conn_err = 1;
-    return;
-  }
+	struct request* sendRequest = request;
+	int server = request->connection_server;
+	if (request->next_request != NULL)
+	{
+		printf("send ohhhhhhhh noooooooooooooooooooooooooooooo\n");
+	}
+	if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+	{
+		printf("server number %d, fd %d. on send request. updating variant and connection\n", server, request->connection->sock);
+		//request->server_variant++;
+		//request->connection = request->worker->connections[server];
+		*conn_err = 1;
+		return;
+	}
+	else if (request->server_variant > request->worker->connection_server_variant[server])
+	{
+		printf("1) tcpSendRequest. request->server_variant > request->worker->connection_server_variant[server]\n");
+		exit(-1);
+	}
 #ifdef GEM5
-      m5_work_begin(sendRequest->header.opcode, sendRequest->header.opaque); 
+	m5_work_begin(sendRequest->header.opcode, sendRequest->header.opaque); 
 #endif
-  if(request->bad_multiget)
-  {
-    printf("request->bad_multiget\n");
-    while(sendRequest != NULL) {
-       printf("request->bad_multiget in while\n");
-      int totalSize = sendRequest->value_size + sendRequest->key_size + sendRequest->header.extras_length + sizeof(struct request_header);
+	if(request->bad_multiget)
+	{
+		printf("request->bad_multiget\n");
+		while(sendRequest != NULL) {
+			printf("request->bad_multiget in while\n");
+			int totalSize = sendRequest->value_size + sendRequest->key_size + sendRequest->header.extras_length + sizeof(struct request_header);
       
-      char* oneBigPacket = malloc(sizeof(char) * totalSize);
-      char* ptr = oneBigPacket;
+			char* oneBigPacket = malloc(sizeof(char) * totalSize);
+			char* ptr = oneBigPacket;
 
-      memcpy(ptr, (char *) (& sendRequest->header), sizeof(struct request_header));
-      ptr += sizeof(struct request_header);
+			memcpy(ptr, (char *) (& sendRequest->header), sizeof(struct request_header));
+			ptr += sizeof(struct request_header);
 
-      memcpy(ptr, sendRequest->extras, sendRequest->header.extras_length);
-      ptr += sendRequest->header.extras_length;
+			memcpy(ptr, sendRequest->extras, sendRequest->header.extras_length);
+ 			ptr += sendRequest->header.extras_length;
 
-      memcpy(ptr, sendRequest->key, sendRequest->key_size);
-      ptr += sendRequest->key_size;
+			memcpy(ptr, sendRequest->key, sendRequest->key_size);
+			ptr += sendRequest->key_size;
 
-      memcpy(ptr, sendRequest->value, sendRequest->value_size);
+			memcpy(ptr, sendRequest->value, sendRequest->value_size);
 
-      gettimeofday(&request->send_time, NULL);
+			gettimeofday(&request->send_time, NULL);
 
-      printf("sending request (writing block) for server %d, port %d, sock %d\n",request->connection_server,request->connection->port, request->connection->sock);
-      int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
+			printf("2) tcpSendRequest. sending request (writing block) for server %d, port %d, sock %d\n",request->connection_server,request->connection->port, request->connection->sock);
+ 			int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
       
-      free(oneBigPacket);
+			free(oneBigPacket);
 
-      if (result == -1)
-      {
-         printf("WOW - IM HERE???\n");
-         exit(-1);
-      }
-      else
-      {
-        sendRequest = sendRequest->next_request;
-      }
-    }
-  }
-  else
-  { 
-    int totalSize = 0;
-    while(sendRequest != NULL) {
-      totalSize += sendRequest->value_size + sendRequest->key_size + sendRequest->header.extras_length + sizeof(struct request_header);
-      sendRequest = sendRequest->next_request;
-    }
-    char* oneBigPacket = malloc(sizeof(char) * totalSize);
-    char* ptr = oneBigPacket;
+			if (result == -1)
+			{
+				printf("WOW - IM HERE???\n");
+				exit(-1);
+			}
+			else
+			{
+				sendRequest = sendRequest->next_request;
+			}
+		}
+	}
+	else
+	{ 
+		int totalSize = 0;
+ 		while(sendRequest != NULL) {
+			totalSize += sendRequest->value_size + sendRequest->key_size + sendRequest->header.extras_length + sizeof(struct request_header);
+			sendRequest = sendRequest->next_request;
+		}
+		char* oneBigPacket = malloc(sizeof(char) * totalSize);
+		char* ptr = oneBigPacket;
 
-    sendRequest = request;
-    while(sendRequest != NULL) {
-      memcpy(ptr, (char *) (& sendRequest->header), sizeof(struct request_header));
-      ptr += sizeof(struct request_header);
+		sendRequest = request;
+		while(sendRequest != NULL) {
+			memcpy(ptr, (char *) (& sendRequest->header), sizeof(struct request_header));
+			ptr += sizeof(struct request_header);
 
-      memcpy(ptr, sendRequest->extras, sendRequest->header.extras_length);
-      ptr += sendRequest->header.extras_length;
+			memcpy(ptr, sendRequest->extras, sendRequest->header.extras_length);
+			ptr += sendRequest->header.extras_length;
 
-      memcpy(ptr, sendRequest->key, sendRequest->key_size);
-      ptr += sendRequest->key_size;
+			memcpy(ptr, sendRequest->key, sendRequest->key_size);
+			ptr += sendRequest->key_size;
 
-      memcpy(ptr, sendRequest->value, sendRequest->value_size);
-      sendRequest = sendRequest->next_request;
-    }
+			memcpy(ptr, sendRequest->value, sendRequest->value_size);
+			sendRequest = sendRequest->next_request;
+		}
 
-    gettimeofday(&request->send_time, NULL);
-    int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
-    free(oneBigPacket);
+		gettimeofday(&request->send_time, NULL);
+		int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
+		free(oneBigPacket);
 
-    if (result == -1)
-    {
+		if (result == -1)
+		{
 
-      int a = pthread_mutex_lock(&move_connection_lock);
-      printf("request - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
-      *conn_err = 1;
-      if (request->server_variant != request->worker->connection_server_variant[server]) //someone already handeled the variant
-      {
-         printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
-         request->server_variant++;    //TODO: free lock   
-         return;
-      }
-     
-      //deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
-      printf("server number %d: had write error on fd %d\n", server, request->connection->sock);
-      *old_sock = request->connection->sock;
+			int a = 0;//pthread_mutex_lock(&move_connection_lock);
+ 			printf("request - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
+			*conn_err = 1;
+			if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+			{
+				printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
+				request->server_variant++;
+				printf("request short - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
+				int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+				printf("request short - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);
+				return;
+			}
+			else if (request->server_variant > request->worker->connection_server_variant[server])
+			{
+				printf("request->server_variant > request->worker->connection_server_variant[server]\n");
+				exit(-1);
+			}
 
-      if (request->worker->connection_server_variant[server] != 2)
-      {
-         request->worker->connection_server_variant[server]++;
-         printf("server number %d: moving to variant %d \n", server, request->worker->connection_server_variant[server]);
-         if (request->worker->connection_server_variant[server] == 1)
-         {
-            printf("server number %d: setting connection. old addrss - %s, new address - %s, old port - %d, new port - %d\n",
-					server ,request->worker->config->server_ip_address[0] ,
-					request->worker->config->server_ip_address_backup[0], 
-					request->worker->config->server_port[0],request->worker->config->server_port_backup[0]);
-	        request->worker->connections[server] = createConnection(request->worker->config->server_ip_address_backup[0], 
-				  												    request->worker->config->server_port_backup[0], 
-					  											    request->worker->config->protocol_mode, 
-																    request->worker->config->naggles);
-            printf("server number %d: new connection set\n", server);
-		    printf("server number %d: previous sock: %d, new sock: %d\n",server, request->connection->sock, request->worker->connections[server]->sock);
-            request->connection = request->worker->connections[server];
-            request->server_variant++;
-            createEvents(server, request->worker);
-         }
-         else if (request->worker->connection_server_variant[server] == 2)
-         {
-            printf("!!!!!!!!!!!!!!!!!!!!!! TRYING SECOND BACKUP for server numbr %d\n", server);
-	        request->worker->connections[server] = createConnection(request->worker->config->server_ip_address_backup_2[0], 
-																    request->worker->config->server_port_backup_2[0], 
-																    request->worker->config->protocol_mode, 
-																    request->worker->config->naggles);
-            request->connection = request->worker->connections[server];
-         }
-         else
-         {
-            printf("connection server variant is not in range\n");
-            exit(-1);
-         }
-      }
-      printf("request - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-      int b = pthread_mutex_unlock(&move_connection_lock);
-      printf("request - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);
-    }
-  }
+			//deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
+			printf("server number %d: had write error on fd %d\n", server, request->connection->sock);
+			*old_sock = request->connection->sock;
+	
+			int changeServerRes = changeServer(request, server);
+			if (changeServerRes == 1)
+			{
+				//do nothing
+			}
+			else
+			{
+				printf("connection server variant is not in range\n");
+				exit(-1);
+			}
+			printf("request - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
+			int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+			printf("request - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);
+		}
+	}
 }//End tcpSendRequest
 
 //Each UDP datagram contains a simple frame header, followed by data in the

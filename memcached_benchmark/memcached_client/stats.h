@@ -65,7 +65,7 @@ void checkExit(struct config* config);
 void addSample(struct stat* stat, float sample);
 double getAvg(struct stat* stat);
 double getStdDev(struct stat* stat);
-void statsLoop(struct config* config);
+void statsLoop(struct config* config, int numOfThreads);
 
 
 #endif

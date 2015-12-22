@@ -8,6 +8,7 @@
 #include "loader.h"
 #include <assert.h>
 #include "worker.h"
+#include <signal.h>
 
 pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -97,7 +98,7 @@ double findQuantile(struct stat* stat, double quantile) {
 
 void printGlobalStats(struct config* config) {
 
-  pthread_mutex_lock(&stats_lock);
+  //pthread_mutex_lock(&stats_lock);
   struct timeval currentTime;
   gettimeofday(&currentTime, NULL);
   double timeDiff = currentTime.tv_sec - global_stats.last_time.tv_sec + 1e-6*(currentTime.tv_sec - global_stats.last_time.tv_sec);
@@ -123,23 +124,32 @@ void printGlobalStats(struct config* config) {
   global_stats.last_time = currentTime;
 
   checkExit(config);
-  pthread_mutex_unlock(&stats_lock);
+  //pthread_mutex_unlock(&stats_lock);
 
 }//End printGlobalStats()
 
 
 //Print out statistics every second
-void statsLoop(struct config* config) {
-
-  pthread_mutex_lock(&stats_lock);
+void statsLoop(struct config* config, int numOfThreads) {
+  int i;
+  //pthread_mutex_lock(&stats_lock);
   gettimeofday(&start_time, NULL);
-  pthread_mutex_unlock(&stats_lock);
+  //pthread_mutex_unlock(&stats_lock);
 
   sleep(2);
   printf("Stats:\n");
   printf("-------------------------\n");
   while(1) {
     printGlobalStats(config);
+	for( i = 0; i < numOfThreads; i++) {
+		int ret = pthread_kill(config->workers[i]->thread, 0);
+		if (ret != 0)
+		{
+			printf("thread with id %u is dead!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", (unsigned int)config->workers[i]->thread);
+		} else {
+			printf("thread with id %u is alive\n", (unsigned int)config->workers[i]->thread);
+		}
+	}
     sleep(config->stats_time);
     //sleep(1000 * 60);
   }//End while()

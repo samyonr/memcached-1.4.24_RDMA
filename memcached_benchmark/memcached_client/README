@@ -20,6 +20,7 @@ Known Issues:
 - Mutex's lock is not free on one scenario. There is a comment for it.
 - There is a lot of logs during the reconnection.
 - On read response, there is a missed place with possible read from socket - the program can fail there.
+- Failover is implemented only for TCP.
 
 
 

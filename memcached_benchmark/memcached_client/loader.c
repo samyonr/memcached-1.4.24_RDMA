@@ -374,7 +374,7 @@ int main(int argc, char** argv){
   printf("debug: setup loaded%d\n",1);
   createWorkers(config);
   printf("debug: workers created%d\n",1);
-  statsLoop(config);
+  statsLoop(config, config->n_workers);
   return 0;
 
 }//End main()

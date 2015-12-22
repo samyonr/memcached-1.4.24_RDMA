@@ -16,6 +16,12 @@
 #ifdef FLEXUS
 #include "magic2_breakpoint.h"
 #endif
+
+struct events_state {
+	int fd;
+	int active;
+};
+
 struct config {
   int protocol_mode;
 
@@ -26,6 +32,7 @@ struct config {
   int n_servers;
   struct worker** workers;
   int n_connections_total;
+  struct events_state* events_state;
 
   int run_time;
   int stats_time;

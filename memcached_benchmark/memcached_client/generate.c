@@ -281,7 +281,15 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
 
   //Pick a random connection
   int connection_server = randomFunction(worker) % worker->nConnections;
-  struct conn* conn = worker->connections[connection_server];
+  struct conn* conn;
+  if (worker->connection_server_variant[connection_server] == 0)
+  {
+    conn = worker->connections_v0[connection_server];
+  } else if (worker->connection_server_variant[connection_server] == 1) {
+    conn = worker->connections_v1[connection_server];
+  } else {
+    conn = worker->connections_v2[connection_server];
+  }
 
   char* value = NULL;
   int valueSize = 0;

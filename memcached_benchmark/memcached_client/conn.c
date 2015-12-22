@@ -40,7 +40,7 @@ struct conn* createConnection(const char* ip_address, int port, int protocol, in
 
   if (verbose) 
       printf("Created connection on fd %d, uid %d\n", connection->sock, connection->uid);
-
+  printf("Created connection on fd %d, uid %d\n", connection->sock, connection->uid);
   return connection;
 
 }//End createConnection()

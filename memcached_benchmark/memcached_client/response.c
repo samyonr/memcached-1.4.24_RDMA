@@ -33,7 +33,7 @@ int receiveResponse(struct request* request, double difftime, int *old_sock) {
     if (notFound == 0)
     {
 
-      printf("repeating last request\n");
+      //printf("repeating last request\n");
       return -1;
     }
   }//End while()
@@ -114,138 +114,128 @@ int udpReceiveResponse(struct request* request, int final, double difftime) {
 
 int tcpReceiveResponse(struct request* request, int final, double difftime, int *conn_err, int *old_sock) {
 
-  struct response_header response_header;
-  int fd = request->connection->sock;
+	struct response_header response_header;
+	int fd = request->connection->sock;
   
-  int server = request->connection_server;
-  if (request->next_request != NULL)
-  {
-    printf("receive ohhhhhhhh noooooooooooooooooooooooooooooo\n");
-  }
-  if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
-  {
-     printf("server number %d, fd %d, server fd %d, on respose. how that's possible? request variant %d, worker variant %d\n", server, request->connection->sock, request->worker->connections[server]->sock,
-          request->server_variant, request->worker->connection_server_variant[server]); 
-     request->server_variant++;
-     request->connection = request->worker->connections[server];
-     *conn_err = 1;
-    return 0;
-     //exit(-1);
-  }
+	int server = request->connection_server;
+	if (request->next_request != NULL)
+	{
+		printf("receive ohhhhhhhh noooooooooooooooooooooooooooooo\n");
+	}
+	if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+	{
+		printf("server number %d, fd %d, on respose. how that's possible? request variant %d, worker variant %d\n", server, request->connection->sock,
+			request->server_variant, request->worker->connection_server_variant[server]); 
+		//printf("server number %d, fd %d, server fd %d, on respose. how that's possible? request variant %d, worker variant %d\n", server, request->connection->sock, request->worker->connections[server]->sock,
+		//	request->server_variant, request->worker->connection_server_variant[server]); 
+		//request->server_variant++;
+		//request->connection = request->worker->connections[server];
+		*conn_err = 1;
+		return 0;
+		//exit(-1);
+	}
+	else if (request->server_variant > request->worker->connection_server_variant[server])
+	{
+		printf("1) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
+		exit(-1);
+	}
 
-  int read_status = readBlock(fd, &response_header, sizeof(response_header));
-  if (read_status == -1)
-  {
-      int a =pthread_mutex_lock(&move_connection_lock);
-      printf("response - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
-      *conn_err = 1;
-      if (request->server_variant != request->worker->connection_server_variant[server]) //someone already handeled the variant
-      {
-         printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
-         request->server_variant++;       
-         return 0;
-      }
+	int read_status = readBlock(fd, &response_header, sizeof(response_header));
+	if (read_status == -1)
+	{
+		int a = 0;//pthread_mutex_lock(&move_connection_lock);
+		printf("response - server number %d: lock set. fd %d, status %d\n",server, request->connection->sock,a);
+		*conn_err = 1;
+		if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+		{
+			printf("server number %d, fd %d. just updating variant\n", server, request->connection->sock);
+			request->server_variant++;
+			printf("response short - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
+			int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+			printf("response short - 2. server number %d: lock free. fd %d, status %d\n",server, request->connection->sock,b);       
+			return 0;
+		}
+		else if (request->server_variant > request->worker->connection_server_variant[server])
+		{
+			printf("2) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
+			exit(-1);
+ 		}
 
 
-	  //deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
-      printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
-      *old_sock = request->connection->sock;
+		//deleteEvents(request->connection->sock, request->worker->event_map, request->worker->nEvents);
+		printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
+		*old_sock = request->connection->sock;
       
-	  if (request->worker->connection_server_variant[server] != 2)
-      {
-         request->worker->connection_server_variant[server]++;
-         printf("server number %d: moving to variant %d \n", server, request->worker->connection_server_variant[server]);
-         if (request->worker->connection_server_variant[server] == 1)
-         {
-            printf("server number %d: setting connection. old addrss - %s, new address - %s, old port - %d, new port - %d\n",
-					server ,request->worker->config->server_ip_address[0] ,
-					request->worker->config->server_ip_address_backup[0], 
-					request->worker->config->server_port[0],request->worker->config->server_port_backup[0]);
-	        request->worker->connections[server] = createConnection(request->worker->config->server_ip_address_backup[0], 
-				  												    request->worker->config->server_port_backup[0], 
-					  											    request->worker->config->protocol_mode, 
-																    request->worker->config->naggles);
-            printf("server number %d: new connection set\n", server);
-		    printf("server number %d: previous sock: %d, new sock: %d\n",server, request->connection->sock, request->worker->connections[server]->sock);
-            request->connection = request->worker->connections[server];
-            request->server_variant++;
-            createEvents(server, request->worker);
-         }
-         else if (request->worker->connection_server_variant[server] == 2)
-         {
-            printf("!!!!!!!!!!!!!!!!!!!!!! TRYING SECOND BACKUP for server number %d\n", server);
-	        request->worker->connections[server] = createConnection(request->worker->config->server_ip_address_backup_2[0], 
-																    request->worker->config->server_port_backup_2[0], 
-																    request->worker->config->protocol_mode, 
-																    request->worker->config->naggles);
-            request->connection = request->worker->connections[server];
-       }
-       else
-       {
-          printf("connection server variant is not in range\n");
-          exit(-1);
-       }
-       printf("response - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
-       int b = pthread_mutex_unlock(&move_connection_lock);
-       printf("response - 2. server number %d: lock free. fd %d status %d\n",server, request->connection->sock,b);
-    }
-    return 0;
-  }
-  //Check the magic number is correct
-  if(response_header.magic != MAGIC_RESPONSE) {
-    printf("On read Incorrect magic number: %x should be: %x\n", response_header.magic, MAGIC_RESPONSE);
-    exit(-1);
-  }
+		int changeServerRes = changeServer(request, server);
+		if (changeServerRes == 1)
+		{
+			//do nothing
+		}
+		else
+		{
+			printf("connection server variant is not in range\n");
+			exit(-1);
+		}
+		printf("response - 1. server number %d: lock free. fd %d\n",server, request->connection->sock);
+		int b = 0;//pthread_mutex_unlock(&move_connection_lock);
+		printf("response - 2. server number %d: lock free. fd %d status %d\n",server, request->connection->sock,b);
+		return 0;
+	}
+	//Check the magic number is correct
+	if(response_header.magic != MAGIC_RESPONSE) {
+		printf("On read Incorrect magic number: %x should be: %x\n", response_header.magic, MAGIC_RESPONSE);
+		exit(-1);
+	}
 #ifdef GEM5
-  m5_work_end(response_header.opcode, response_header.opaque);
+	m5_work_end(response_header.opcode, response_header.opaque);
 #endif
 
 #ifdef FLEXUS
-  if(request->request_type == TYPE_GET)
-    MAGIC2(211, request->header.opaque);
-  else if(request->request_type==TYPE_SET)
-    MAGIC2(221,request->header.opaque);	
+	if(request->request_type == TYPE_GET)
+		MAGIC2(211, request->header.opaque);
+	else if(request->request_type==TYPE_SET)
+		MAGIC2(221,request->header.opaque);	
 #endif
 
-  int extrasSize = (int) response_header.extras_length;
+	int extrasSize = (int) response_header.extras_length;
 
-  int keySize = 0;
-  keySize |= response_header.key_length[1];
-  keySize |= response_header.key_length[0] << 8;
+	int keySize = 0;
+	keySize |= response_header.key_length[1];
+	keySize |= response_header.key_length[0] << 8;
 
-  int bodySize = 0;
-  bodySize |= response_header.total_body_length[3]&0xFF;
-  bodySize |= (response_header.total_body_length[2]&0xFF) <<8;
-  bodySize |= (response_header.total_body_length[1]&0xFF) <<16;
-  bodySize |= (response_header.total_body_length[0]&0xFF) <<24;
+	int bodySize = 0;
+	bodySize |= response_header.total_body_length[3]&0xFF;
+	bodySize |= (response_header.total_body_length[2]&0xFF) <<8;
+	bodySize |= (response_header.total_body_length[1]&0xFF) <<16;
+	bodySize |= (response_header.total_body_length[0]&0xFF) <<24;
 
-  int valueSize = bodySize - keySize - extrasSize;
+	int valueSize = bodySize - keySize - extrasSize;
 
-  char* extras = malloc(extrasSize);
-  char* key = malloc(keySize+1);
-  char* value = malloc(valueSize+1);
-  readBlock(fd, extras, extrasSize);
-  readBlock(fd, key, keySize);
-  key[keySize] = '\0';
+	char* extras = malloc(extrasSize);
+	char* key = malloc(keySize+1);
+	char* value = malloc(valueSize+1);
+	readBlock(fd, extras, extrasSize);
+	readBlock(fd, key, keySize);
+	key[keySize] = '\0';
 
-  int read_status2 = readBlock(fd, value, valueSize);
-  if (read_status2 == -1 )
-  {
-     printf("TOTALY MISSED THAT\n");
-  }
+	int read_status2 = readBlock(fd, value, valueSize);
+	if (read_status2 == -1 )
+	{
+		printf("TOTALY MISSED THAT\n");
+	}
 
-  value[valueSize] = '\0';
-  struct response response;
-  response.request = request;
-  response.value_size = valueSize;
-  response.response_header = response_header;
-  int notFound = processResponse(&response, final, difftime);
+	value[valueSize] = '\0';
+	struct response response;
+	response.request = request;
+	response.value_size = valueSize;
+	response.response_header = response_header;
+	int notFound = processResponse(&response, final, difftime);
 
-  free(extras);
-  free(key);
-  free(value);
+	free(extras);
+	free(key);
+	free(value);
    
-  return notFound;
+	return notFound;
 
 }//End tcpReceiveRequest()
 
@@ -282,7 +272,7 @@ int processResponse(struct response* response, int final, double difftime){
 
 
   //Update stats
-  pthread_mutex_lock(&stats_lock);
+  //pthread_mutex_lock(&stats_lock);
 
   global_stats.ops++;
   //Check if this was a hit or miss
@@ -303,7 +293,7 @@ int processResponse(struct response* response, int final, double difftime){
   }
 
   if(!(errorCode == 1 || final == 1)){
-    pthread_mutex_unlock(&stats_lock);
+    //pthread_mutex_unlock(&stats_lock);
     return 0;
   }
 
@@ -322,7 +312,7 @@ int processResponse(struct response* response, int final, double difftime){
 
   addSample(&global_stats.response_time, difftime);
 
-  pthread_mutex_unlock(&stats_lock);
+  //pthread_mutex_unlock(&stats_lock);
 
   return 1;
 
