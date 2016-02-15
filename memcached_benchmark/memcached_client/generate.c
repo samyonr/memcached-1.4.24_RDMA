@@ -54,28 +54,28 @@ struct key_list* generateKeys(struct config* config) {
 
 }//End generateKeys()
 
-struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* worker){
+struct dep_entry* getRandomDepEntry(struct dep_dist* dep_dist, struct worker* worker) {
 
-  double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
-  //Do a binary search
-  int top = 1;
-  int bottom = dep_dist->n_entries-1;
-  int current = bottom/2;
-  struct dep_entry* dep_entry = NULL;
-  while(top != bottom){
-    dep_entry = dep_dist->dep_entries[current];
-//    printf("top %d bottom %d current %d lookup %f cdf %f\n", top, bottom, current, cdf_to_lookup, dep_entry->cdf);
-    if( dep_entry->cdf > cdf_to_lookup){
-      bottom = current;
-    } else {
-      top = current + 1;
-    }
-    current = (bottom-top)/2 + top;
-  }
+	double cdf_to_lookup = (parRandomFunction(worker) % 100000000)/100000000.0;
+	//Do a binary search
+	int top = 0;
+	int bottom = dep_dist->n_entries-1;
+	int current = bottom/2;
+	struct dep_entry* dep_entry = NULL;
+	while(top != bottom) {
+		dep_entry = dep_dist->dep_entries[current];
+		//printf("top %d bottom %d current %d lookup %f cdf %f\n", top, bottom, current, cdf_to_lookup, dep_entry->cdf);
+		if (dep_entry->cdf > cdf_to_lookup) {
+			bottom = current;
+		} else {
+			top = current + 1;
+		}
+		current = (bottom-top)/2 + top;
+	}
 
- //  printf("top %d bottom %d current %d lookup %f cdf %f\n", top, bottom, current, cdf_to_lookup, dep_entry->cdf);
+	//printf("top %d bottom %d current %d lookup %f cdf %f\n", top, bottom, current, cdf_to_lookup, dep_entry->cdf);
 
-  return dep_entry;  
+	return dep_entry;
 }
 
 int getIntQuantile(struct int_dist* dist) {
@@ -181,19 +181,16 @@ struct dep_dist* loadDepFile(struct config* config) {
   int i = lines-1;
   file = fopen(config->input_file, "r");
   double avg_size=0;
-  //while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
-  for(;i > 0; i--) {
-    fgets(lineBuffer, sizeof(lineBuffer), file);
+  while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
     char* cdfValue = strtok(lineBuffer, " ,\n");
     char* sizeValue = strtok(NULL, " ,\n");
     char* key = strtok(NULL, " ,\n");
     struct dep_entry* entry = malloc(sizeof(struct dep_entry));
     entry->cdf = atof(cdfValue);
     entry->size = atoi(sizeValue);
-
     strcpy(entry->key, key);
     dist->dep_entries[i] = entry;
-    //i--;   
+    i--;
     avg_size+=entry->size; 
   }//End while()
   avg_size = avg_size/lines;

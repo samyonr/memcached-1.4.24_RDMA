@@ -229,12 +229,8 @@ void loadServerFile(struct config* config){
     exit(1);	
   }
   char lineBuffer[1024]; 
-  int i=0;
-  char *return_val;
-  //while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
-  for(i = 0; i<1; i++) {
-    return_val = fgets(lineBuffer, sizeof(lineBuffer), file);
-	printf("debug: return value %s\n",return_val);
+  int i = 0;
+  while (fgets(lineBuffer, sizeof(lineBuffer), file)) {
     printf("debug: got line %s\n",lineBuffer);
 
     char* ipaddress = nslookup(strtok(lineBuffer, " ,\n"));
@@ -257,7 +253,7 @@ void loadServerFile(struct config* config){
     config->server_ip_address_backup_2[i]=calloc(strlen(ipaddress_3)+1, sizeof(char));
     strcpy(config->server_ip_address_backup_2[i], ipaddress_3);  
     printf("debug: ipaddress backup 2 - %s\n", config->server_ip_address_backup_2[i]); 
-  //  i++;
+    i++;
 
   }
   fclose(file);
