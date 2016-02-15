@@ -9,11 +9,12 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include "stats.h"
+#include "config.h"
 
 #define DEBUG_READ_WRITE 0
 struct worker;
-int writeBlock(int fd, void* buffer, int writeSize);
-int readBlock(int fd, void* buffer, int readSize);
+int writeBlock(int fd, void* buffer, int writeSize, int failover);
+int readBlock(int fd, void* buffer, int readSize, int failover);
 
 char* nslookup(char* hostname);
 void timingTests();

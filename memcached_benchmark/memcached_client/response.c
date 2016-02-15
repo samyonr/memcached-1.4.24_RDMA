@@ -9,20 +9,23 @@ int receiveResponse(struct request* request, double difftime) {
 	int finalRequest = 0;
 	int notFound = 0;
 	int conn_err = 0;
-	while(currentRequest != NULL && notFound == 0){
-		if(currentRequest->next_request == NULL){
+	while (currentRequest != NULL && notFound == 0) {
+		if (currentRequest->next_request == NULL) {
 			finalRequest = 1;
 		} else {
 			finalRequest = 0;
 		}
-		if(request->connection->protocol == TCP_MODE){
+		if (request->connection->protocol == TCP_MODE){
 			// printf("receiving request final? %d\n", finalRequest);
 			notFound = tcpReceiveResponse(request,finalRequest, difftime, &conn_err);
-			if (conn_err == 1)
+			if (request->worker->config->tcp_failover)
 			{
-				//printf("connection error happend\n");
+				if (conn_err == 1)
+				{
+					//printf("connection error happend\n");
+				}
 			}
-		} else if(request->connection->protocol == UDP_MODE){
+		} else if (request->connection->protocol == UDP_MODE){
 			notFound = udpReceiveResponse(request,finalRequest, difftime);
 		} else {
 			printf("Undefined protocol\n");
@@ -30,10 +33,13 @@ int receiveResponse(struct request* request, double difftime) {
 		}
 
 		currentRequest = currentRequest->next_request;
-		if (notFound == 0)
+		if (request->worker->config->tcp_failover)
 		{
-			//printf("repeating last request\n");
-			return -1;
+			if (notFound == 0)
+			{
+				//printf("repeating last request\n");
+				return -1;
+			}
 		}
 	}//End while()
 	return 1;
@@ -117,52 +123,58 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 	int fd = request->connection->sock;
   
 	int server = request->connection_server;
-	if (request->next_request != NULL)
+	if (request->worker->config->tcp_failover)
 	{
-		printf("receive ohhhhhhhh noooooooooooooooooooooooooooooo\n");
-	}
-	if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
-	{
-		printf("server number %d, fd %d. on receive response. response of old connection\n", server, request->connection->sock); 
-		*conn_err = 1;
-		return 0; //return error
-	}
-	else if (request->server_variant > request->worker->connection_server_variant[server])
-	{
-		//should never happen
-		printf("1) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
-		exit(-1);
-	}
-
-	int read_status = readBlock(fd, &response_header, sizeof(response_header));
-	if (read_status == -1)
-	{
-		*conn_err = 1;
+		if (request->next_request != NULL)
+		{
+			printf("receive ohhhhhhhh noooooooooooooooooooooooooooooo\n");
+		}
 		if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
 		{
-			printf("server number %d, fd %d. on receive response. response of old connection performed read attempt\n", server, request->connection->sock); 
+			printf("server number %d, fd %d. on receive response. response of old connection\n", server, request->connection->sock);
+			*conn_err = 1;
 			return 0; //return error
 		}
 		else if (request->server_variant > request->worker->connection_server_variant[server])
 		{
 			//should never happen
-			printf("2) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
+			printf("1) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
 			exit(-1);
- 		}
+		}
+	}
 
-		printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
-      
-		int changeServerRes = changeServer(request, server);
-		if (changeServerRes == 1)
+	int read_status = readBlock(fd, &response_header, sizeof(response_header), request->worker->config->tcp_failover);
+	if (request->worker->config->tcp_failover)
+	{
+		if (read_status == -1)
 		{
-			//do nothing
+			*conn_err = 1;
+			if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+			{
+				printf("server number %d, fd %d. on receive response. response of old connection performed read attempt\n", server, request->connection->sock);
+				return 0; //return error
+			}
+			else if (request->server_variant > request->worker->connection_server_variant[server])
+			{
+				//should never happen
+				printf("2) tcpReceiveResponse. request->server_variant > request->worker->connection_server_variant[server]\n");
+				exit(-1);
+			}
+
+			printf("server number %d: had read error on fd %d\n", server, request->connection->sock);
+
+			int changeServerRes = changeServer(request, server);
+			if (changeServerRes == 1)
+			{
+				//do nothing
+			}
+			else
+			{
+				printf("connection server variant is not in range\n");
+				exit(-1);
+			}
+			return 0; //return error
 		}
-		else
-		{
-			printf("connection server variant is not in range\n");
-			exit(-1);
-		}
-		return 0; //return error
 	}
 	//Check the magic number is correct
 	if(response_header.magic != MAGIC_RESPONSE) {
@@ -197,15 +209,18 @@ int tcpReceiveResponse(struct request* request, int final, double difftime, int 
 	char* extras = malloc(extrasSize);
 	char* key = malloc(keySize+1);
 	char* value = malloc(valueSize+1);
-	readBlock(fd, extras, extrasSize);
-	readBlock(fd, key, keySize);
+	readBlock(fd, extras, extrasSize, request->worker->config->tcp_failover); //TODO: TOTALY MISSED THAT
+	readBlock(fd, key, keySize, request->worker->config->tcp_failover); //TODO: TOTALY MISSED THAT
 	key[keySize] = '\0';
 
-	int read_status2 = readBlock(fd, value, valueSize);
-	if (read_status2 == -1 )
+	int read_status2 = readBlock(fd, value, valueSize, request->worker->config->tcp_failover);
+	if (request->worker->config->tcp_failover)
 	{
-		printf("TOTALY MISSED THAT\n");
-		exit(-1); //from some reason, it never happend
+		if (read_status2 == -1 )
+		{
+			printf("TOTALY MISSED THAT\n"); //TODO: TOTALY MISSED THAT
+			exit(-1); //from some reason, it never happened
+		}
 	}
 
 	value[valueSize] = '\0';

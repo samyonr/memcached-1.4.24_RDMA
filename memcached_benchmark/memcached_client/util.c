@@ -107,7 +107,7 @@ char* nslookup(char* hostname){
 
 }//End nslookup
 
-int writeBlock(int fd, void* buffer, int writeSize) {
+int writeBlock(int fd, void* buffer, int writeSize, int failover) {
 
 #if DEBUG_READ_WRITE
 	printf("Going to write %d bytes\n", writeSize);
@@ -127,13 +127,24 @@ int writeBlock(int fd, void* buffer, int writeSize) {
 	}
 	printf("\n");
 #endif
-	while(nWriteTotal != writeSize){
+	while (nWriteTotal != writeSize) {
 		nWrite = write(fd, buffer + nWriteTotal, writeSize - nWriteTotal);
-		if(nWrite <= 0) {
-			printf("Write error: %d\n", nWrite);
-			perror("Write error");
-			printf("error occured during writing fd %d\n", fd);
-			return -1;
+		if (failover)
+		{
+			if (nWrite <= 0) {
+				printf("Write error: %d\n", nWrite);
+				perror("Write error");
+				printf("error occured during writing fd %d\n", fd);
+				return -1;
+			}
+		}
+		else
+		{
+			if(nWrite < 0) {
+				printf("Write error: %d\n", nWrite);
+				perror("Write error");
+				exit(-1);
+			}
 		}
 		nWriteTotal += nWrite;
 	}
@@ -148,52 +159,66 @@ int writeBlock(int fd, void* buffer, int writeSize) {
 	return 1;
 }//End writeBlock()
 
-int readBlock(int fd, void* buffer, int readSize) {
+int readBlock(int fd, void* buffer, int readSize, int failover) {
 
 #if DEBUG_READ_WRITE
 	printf("Going to read %d bytes\n", readSize);
 #endif
+
 	fd_set set;
 	struct timeval timeout;
 	int rv;
 
-	FD_ZERO(&set); /* clear the set */
-	FD_SET(fd, &set); /* add our file descriptor to the set */
+	if (failover)
+	{
+		FD_ZERO(&set); /* clear the set */
+		FD_SET(fd, &set); /* add our file descriptor to the set */
 
-	timeout.tv_sec = 60;
-	timeout.tv_usec = 0;
-
+		timeout.tv_sec = 60;
+		timeout.tv_usec = 0;
+	}
 	int nReadTotal = 0;
 	int nRead = 0;
-	while(nReadTotal != readSize){
-	
-		rv = select(fd + 1, &set, NULL, NULL, &timeout);
-		if(rv == -1)
+	while (nReadTotal != readSize) {
+		if (failover)
 		{
-			perror("select\n"); /* an error accured */
-			printf("error occured during reading in select fd %d\n", fd);
-			printf("wanted to read readSize=%d, successed only nReadTotal=%d, problem occured\n",readSize, nReadTotal);
-			exit(-1);
-			return -1;
-		}
-		else if(rv == 0)
-		{
-			printf("timeout\n"); /* a timeout occured */
-			printf("error occured during reading in select timeout fd %d\n", fd);
-			printf("wanted to read readSize=%d, successed only nReadTotal=%d, timeout occured\n",readSize, nReadTotal);
-			exit(-1); //not sure how to deal with timeouts yet - does it necessarily means the server went down?
-			//return -1;
+			rv = select(fd + 1, &set, NULL, NULL, &timeout);
+			if(rv == -1)
+			{
+				perror("select\n"); /* an error accured */
+				printf("error occured during reading in select fd %d\n", fd);
+				printf("wanted to read readSize=%d, successed only nReadTotal=%d, problem occured\n",readSize, nReadTotal);
+				exit(-1);
+				return -1;
+			}
+			else if(rv == 0)
+			{
+				printf("timeout\n"); /* a timeout occured */
+				printf("error occured during reading in select timeout fd %d\n", fd);
+				printf("wanted to read readSize=%d, successed only nReadTotal=%d, timeout occured\n",readSize, nReadTotal);
+				exit(-1); //not sure how to deal with timeouts yet - does it necessarily means the server went down?
+				//return -1;
+			}
+			else
+			{
+				nRead = read(fd, buffer + nReadTotal, readSize - nReadTotal);
+			}
+			if(nRead <= 0) {
+				printf("error occured during reading fd %d\n", fd);
+				return -1;
+				//exit(-1);
+			}
+			nReadTotal += nRead;
 		}
 		else
 		{
-    		nRead = read(fd, buffer + nReadTotal, readSize - nReadTotal);
+			nRead = read(fd, buffer + nReadTotal, readSize - nReadTotal);
+			if(nRead < 0) {
+				perror("Read error");
+				exit(-1);
+			}
+			nReadTotal += nRead;
 		}
-    	if(nRead <= 0) {
-			printf("error occured during reading fd %d\n", fd);
-			return -1;
-			//exit(-1);
-		}
-		nReadTotal += nRead;
 	}
 #if DEBUG_READ_WRITE
 	printf("Reading:\n");

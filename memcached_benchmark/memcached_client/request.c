@@ -94,7 +94,7 @@ void tcpSendRequest(struct request* request, int *conn_err) {
 			gettimeofday(&request->send_time, NULL);
 
 			printf("1) tcpSendRequest. sending request (writing block) for server %d, port %d, sock %d\n",request->connection_server,request->connection->port, request->connection->sock);
- 			int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
+ 			int result = writeBlock(request->connection->sock, oneBigPacket, totalSize, request->worker->config->tcp_failover);
       
 			free(oneBigPacket);
 
@@ -142,7 +142,7 @@ void tcpSendRequest(struct request* request, int *conn_err) {
 		}
 
 		gettimeofday(&request->send_time, NULL);
-		int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
+		int result = writeBlock(request->connection->sock, oneBigPacket, totalSize, request->worker->config->tcp_failover);
 		free(oneBigPacket);
 
 		if (request->worker->config->tcp_failover)
@@ -228,7 +228,7 @@ void udpSendRequest(struct request* request) {
 
  int fd = request->connection->sock;
  gettimeofday(&request->send_time, NULL);
- writeBlock(fd, oneBigPacket, totalSize);
+ writeBlock(fd, oneBigPacket, totalSize, 0);
  free(oneBigPacket);
 
 }//End udpSendRequest()
