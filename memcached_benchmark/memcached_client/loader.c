@@ -34,7 +34,9 @@ void printUsage() {
                 "        [-t arg  runtime of loadtesting in seconds (default: run forever)]\n"
                 "        [-T arg  interval between stats printing (default: 1)]\n"
                 "        [-w number of worker threads]\n"
-                "        [-x run timing tests instead of loadtesting]\n");
+                "        [-x run timing tests instead of loadtesting]\n"
+                "        [-F run in failover mode with TCP]\n");
+
 }
 
 
@@ -85,136 +87,139 @@ struct config* parseArgs(int argc, char** argv) {
   }
 
   int c;
-  while ((c = getopt (argc, argv, "a:c:d:D:ef:g:hi:jk:l:L:m:MnN:o:p:ur:s:S:t:T:w:W:xz")) != -1) {
+  while ((c = getopt (argc, argv, "a:c:d:D:ef:g:hi:jk:l:L:m:MnN:o:p:ur:s:S:t:T:w:W:xz:F")) != -1) {
     switch (c) {
 
       case 'a':
-	config->input_file=calloc(strlen(optarg)+1, sizeof(char));
-  	strcpy(config->input_file, optarg);	
-        break;
+    	  config->input_file=calloc(strlen(optarg)+1, sizeof(char));
+    	  strcpy(config->input_file, optarg);
+    	  break;
 
       case 'c':
-        config->n_connections_total = atoi(optarg);
-        break;
+    	  config->n_connections_total = atoi(optarg);
+    	  break;
 
       case 'd':
-        printf("Using size distribution file %s\n", optarg);
-        config->value_size_dist = loadDistributionFile(optarg);
-        break;
+    	  printf("Using size distribution file %s\n", optarg);
+    	  config->value_size_dist = loadDistributionFile(optarg);
+    	  break;
 
       case 'D':
-        config->server_memory = atoi(optarg);
-        break;
+    	  config->server_memory = atoi(optarg);
+    	  break;
 
       case 'e':
-        config->arrival_distribution_type = ARRIVAL_EXPONENTIAL;
-        break;
+    	  config->arrival_distribution_type = ARRIVAL_EXPONENTIAL;
+    	  break;
 
       //Use a fixed object size
       case 'f':
-        config->fixed_size = atoi(optarg);
-        break;
+    	  config->fixed_size = atoi(optarg);
+    	  break;
       
 
       case 'i':
-        config->incr_frac = atof(optarg);
-        break;
+    	  config->incr_frac = atof(optarg);
+    	  break;
 
 
       case 'j':
-        config->pre_load = 1;
-        break;
+    	  config->pre_load = 1;
+    	  break;
 
       case 'l':
-        config->multiget_size = atoi(optarg);
-        break;
+    	  config->multiget_size = atoi(optarg);
+    	  break;
 
       case 'L':
-        printf("Using multiget file %s\n", optarg);
-        config->multiget_dist = loadDistributionFile(optarg);
-        config->multiget_size = -1;
-        config->multiget_frac = 1.0;
-        break;
+    	  printf("Using multiget file %s\n", optarg);
+    	  config->multiget_dist = loadDistributionFile(optarg);
+    	  config->multiget_size = -1;
+    	  config->multiget_frac = 1.0;
+    	  break;
 
       case 'h':
-        printUsage();
-        exit(0);     
-        break;
+    	  printUsage();
+    	  exit(0);
+    	  break;
 
       case 'k':
         config->n_keys = atoi(optarg);
         break;
 
       case 'm':
-        config->multiget_frac = atof(optarg);
-        break;
+    	  config->multiget_frac = atof(optarg);
+    	  break;
 
       case '1':
-        config->bad_multiget = 1;
-        break;
+    	  config->bad_multiget = 1;
+    	  break;
 
       case 'n':
-        config->naggles = 1;     
-        break;
+    	  config->naggles = 1;
+    	  break;
 
       case 'N':
-        printf("Using popularity file %s\n", optarg);
-        config->key_pop_dist = loadDistributionFile(optarg);     
-        break;
+    	  printf("Using popularity file %s\n", optarg);
+    	  config->key_pop_dist = loadDistributionFile(optarg);
+    	  break;
 
       case 'u':
-        config->protocol_mode = UDP_MODE;     
-        break;
+    	  config->protocol_mode = UDP_MODE;
+    	  break;
  
       //Fraction of requests that are gets
       case 'g':
-        config->get_frac = atof(optarg);     
-        if(config->get_frac < 0 || config->get_frac > 1.0){
-          printf("Get fraction must be between 0 and 1.0\n");   
-          exit(-1);
-        }
-        break;
+    	  config->get_frac = atof(optarg);
+    	  if(config->get_frac < 0 || config->get_frac > 1.0){
+    		  printf("Get fraction must be between 0 and 1.0\n");
+    	  	  exit(-1);
+    	  }
+    	  break;
 
       case 'o':
-        config->output_file=calloc(strlen(optarg)+1, sizeof(char));
-        strcpy(config->output_file, optarg);
-        break;
+    	  config->output_file=calloc(strlen(optarg)+1, sizeof(char));
+    	  strcpy(config->output_file, optarg);
+    	  break;
 
       case 'r':
-        config->rps = atoi(optarg);
-        break;
+    	  config->rps = atoi(optarg);
+    	  break;
 
       case 's':        
-	config->server_file=calloc(strlen(optarg)+1, sizeof(char));
-        strcpy(config->server_file, optarg);
-
-        break;
+    	  config->server_file=calloc(strlen(optarg)+1, sizeof(char));
+    	  strcpy(config->server_file, optarg);
+    	  break;
       
       case 'S':
-	config->scaling_factor=atoi(optarg);
-	break;
+    	  config->scaling_factor=atoi(optarg);
+    	  break;
       
       case 't':
-        config->run_time = atoi(optarg);     
-        break;
+    	  config->run_time = atoi(optarg);
+    	  break;
 
       case 'T':
-        config->stats_time = atoi(optarg); 
-        printf("stats_time = %d\n", config->stats_time);    
-        break;
+    	  config->stats_time = atoi(optarg);
+    	  printf("stats_time = %d\n", config->stats_time);
+    	  break;
 
       case 'w':
-        config->n_workers = atoi(optarg);     
-        break;
+    	  config->n_workers = atoi(optarg);
+    	  break;
      
       case 'x':
-        timingTests();
-        exit(0);
-        break;
+    	  timingTests();
+    	  exit(0);
+    	  break;
 
       case 'z':
-        config->zynga = 1;     
-        break;
+    	  config->zynga = 1;
+    	  break;
+
+      case 'F':
+    	  config->tcp_failover = 1;
+    	  break;
     }
   }
 
@@ -240,19 +245,22 @@ void loadServerFile(struct config* config){
     strcpy(config->server_ip_address[i], ipaddress);  
     printf("debug: ipaddress - %s\n", config->server_ip_address[i]); 
 
-    char* ipaddress_2 = nslookup(strtok(NULL, " ,\n"));
-    config->server_port_backup[i]=atoi(strtok(NULL, " ,\n"));    
-    printf("debug: port backup - %d\n",config->server_port_backup[i]);
-    config->server_ip_address_backup[i]=calloc(strlen(ipaddress_2)+1, sizeof(char));
-    strcpy(config->server_ip_address_backup[i], ipaddress_2);  
-    printf("debug: ipaddress backup - %s\n", config->server_ip_address_backup[i]); 
+    if (config->tcp_failover)
+    {
+		char* ipaddress_2 = nslookup(strtok(NULL, " ,\n"));
+		config->server_port_backup[i]=atoi(strtok(NULL, " ,\n"));
+		printf("debug: port backup - %d\n",config->server_port_backup[i]);
+		config->server_ip_address_backup[i]=calloc(strlen(ipaddress_2)+1, sizeof(char));
+		strcpy(config->server_ip_address_backup[i], ipaddress_2);
+		printf("debug: ipaddress backup - %s\n", config->server_ip_address_backup[i]);
 
-    char* ipaddress_3 = nslookup(strtok(NULL, " ,\n"));
-    config->server_port_backup_2[i]=atoi(strtok(NULL, " ,\n"));    
-    printf("debug: port backup 2 - %d\n",config->server_port_backup_2[i]);
-    config->server_ip_address_backup_2[i]=calloc(strlen(ipaddress_3)+1, sizeof(char));
-    strcpy(config->server_ip_address_backup_2[i], ipaddress_3);  
-    printf("debug: ipaddress backup 2 - %s\n", config->server_ip_address_backup_2[i]); 
+		char* ipaddress_3 = nslookup(strtok(NULL, " ,\n"));
+		config->server_port_backup_2[i]=atoi(strtok(NULL, " ,\n"));
+		printf("debug: port backup 2 - %d\n",config->server_port_backup_2[i]);
+		config->server_ip_address_backup_2[i]=calloc(strlen(ipaddress_3)+1, sizeof(char));
+		strcpy(config->server_ip_address_backup_2[i], ipaddress_3);
+		printf("debug: ipaddress backup 2 - %s\n", config->server_ip_address_backup_2[i]);
+    }
     i++;
 
   }
@@ -363,7 +371,10 @@ void cleanUp(struct config* config) {
 int main(int argc, char** argv){
   
   struct config* config = parseArgs(argc, argv);
-  signal (SIGPIPE, SIG_IGN);
+  if (config->tcp_failover)
+  {
+	  signal (SIGPIPE, SIG_IGN); //prevents crashing on connection errors
+  }
   printConfiguration(config);
   printf("debug: conf printed%d\n",1);
   setupLoad(config);

@@ -9,9 +9,9 @@ int sendRequest(struct request* request) {
 	//Send out all requests (only one unless multiget
 	struct request* sendRequest = request;
 	int conn_err = 0;
-	if(request->connection->protocol == TCP_MODE){
+	if(request->connection->protocol == TCP_MODE) {
 		tcpSendRequest(sendRequest, &conn_err);
-	} else if(request->connection->protocol == UDP_MODE){ 
+	} else if(request->connection->protocol == UDP_MODE) {
 		printf("no UDP support\n"); 
 		exit(-1); //current version not supports UDP
 		udpSendRequest(sendRequest);
@@ -33,10 +33,13 @@ int sendRequest(struct request* request) {
 	//  sendRequest = sendRequest->next_request;
 	//}//End while
 
-	if (conn_err == 1)
+	if (request->worker->config->tcp_failover)
 	{
-		printf("tcp returning -1\n");
-		return -1;
+		if (conn_err == 1)
+		{
+			printf("tcp returning -1\n");
+			return -1;
+		}
 	}
 	return 1;
 }//End sendRequest()
@@ -45,26 +48,29 @@ void tcpSendRequest(struct request* request, int *conn_err) {
   
 	struct request* sendRequest = request;
 	int server = request->connection_server;
-	if (request->next_request != NULL)
+	if (request->worker->config->tcp_failover)
 	{
-		printf("send ohhhhhhhh noooooooooooooooooooooooooooooo\n");
-	}
-	if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
-	{
-		printf("server number %d, fd %d. on send request. request for old connection\n", server, request->connection->sock);
-		*conn_err = 1;
-		return;
-	}
-	else if (request->server_variant > request->worker->connection_server_variant[server])
-	{
-		//should never happen
-		printf("tcpSendRequest. request->server_variant > request->worker->connection_server_variant[server]\n");
-		exit(-1);
+		if (request->next_request != NULL)
+		{
+			printf("send ohhhhhhhh noooooooooooooooooooooooooooooo\n");
+		}
+		if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+		{
+			printf("server number %d, fd %d. on send request. request for old connection\n", server, request->connection->sock);
+			*conn_err = 1;
+			return;
+		}
+		else if (request->server_variant > request->worker->connection_server_variant[server])
+		{
+			//should never happen
+			printf("tcpSendRequest. request->server_variant > request->worker->connection_server_variant[server]\n");
+			exit(-1);
+		}
 	}
 #ifdef GEM5
 	m5_work_begin(sendRequest->header.opcode, sendRequest->header.opaque); 
 #endif
-	if(request->bad_multiget)
+	if (request->bad_multiget)
 	{
 		printf("request->bad_multiget\n");
 		while(sendRequest != NULL) {
@@ -92,10 +98,17 @@ void tcpSendRequest(struct request* request, int *conn_err) {
       
 			free(oneBigPacket);
 
-			if (result == -1)
+			if (request->worker->config->tcp_failover)
 			{
-				printf("WOW - IM HERE???\n");
-				exit(-1);
+				if (result == -1)
+				{
+					printf("WOW - IM HERE???\n");
+					exit(-1);
+				}
+				else
+				{
+					sendRequest = sendRequest->next_request;
+				}
 			}
 			else
 			{
@@ -132,31 +145,34 @@ void tcpSendRequest(struct request* request, int *conn_err) {
 		int result = writeBlock(request->connection->sock, oneBigPacket, totalSize);
 		free(oneBigPacket);
 
-		if (result == -1)
+		if (request->worker->config->tcp_failover)
 		{
-			*conn_err = 1;
-			if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+			if (result == -1)
 			{
-				printf("server number %d, fd %d. request for old connection performed write attempt\n", server, request->connection->sock);
-				return;
-			}
-			else if (request->server_variant > request->worker->connection_server_variant[server])
-			{
-				//should never happen
-				printf("2) request->server_variant > request->worker->connection_server_variant[server]\n");
-				exit(-1);
-			}
-			printf("server number %d: had write error on fd %d\n", server, request->connection->sock);
-	
-			int changeServerRes = changeServer(request, server);
-			if (changeServerRes == 1)
-			{
-				//do nothing
-			}
-			else
-			{
-				printf("connection server variant is not in range\n");
-				exit(-1);
+				*conn_err = 1;
+				if (request->server_variant < request->worker->connection_server_variant[server]) //someone already handeled the variant
+				{
+					printf("server number %d, fd %d. request for old connection performed write attempt\n", server, request->connection->sock);
+					return;
+				}
+				else if (request->server_variant > request->worker->connection_server_variant[server])
+				{
+					//should never happen
+					printf("2) request->server_variant > request->worker->connection_server_variant[server]\n");
+					exit(-1);
+				}
+				printf("server number %d: had write error on fd %d\n", server, request->connection->sock);
+
+				int changeServerRes = changeServer(request, server);
+				if (changeServerRes == 1)
+				{
+					//do nothing
+				}
+				else
+				{
+					printf("connection server variant is not in range\n");
+					exit(-1);
+				}
 			}
 		}
 	}
