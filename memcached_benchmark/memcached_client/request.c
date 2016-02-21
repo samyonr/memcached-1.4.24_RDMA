@@ -278,8 +278,11 @@ struct request* createRequest(int requestType, struct conn* conn, struct worker*
     exit(-1);
   }
   request->connection = conn;
-  request->connection_server = connection_server;
-  request->server_variant = worker->connection_server_variant[connection_server];
+  if (request->worker->config->tcp_failover)
+  {
+	  request->connection_server = connection_server;
+  	  request->server_variant = worker->connection_server_variant[connection_server];
+  }
 
   int keyLength = 0;
   if(key != NULL) {

@@ -40,31 +40,49 @@ void* workerFunction(void* arg) {
 
 void workerLoop(struct worker* worker) {
 
-	event_base_priority_init(worker->event_base, 2);
+	if (worker->config->tcp_failover)
+	{
+		event_base_priority_init(worker->event_base, 2);
 
-	worker->event_map_0 = malloc(sizeof(struct event_map) * (worker->nConnections));
-	worker->event_map_1 = malloc(sizeof(struct event_map) * (worker->nConnections));
-	worker->event_map_2 = malloc(sizeof(struct event_map) * (worker->nConnections));
-	worker->nEvents = (worker->nConnections);
-
+		worker->event_map_0 = malloc(sizeof(struct event_map) * (worker->nConnections));
+		worker->event_map_1 = malloc(sizeof(struct event_map) * (worker->nConnections));
+		worker->event_map_2 = malloc(sizeof(struct event_map) * (worker->nConnections));
+		worker->nEvents = (worker->nConnections);
+	}
 	//Seed event for each fd
 	int i;
 
 	for( i = 0; i < worker->nConnections; i++) {
-		createEvents(i, worker,0);
+		if (worker->config->tcp_failover)
+		{
+			createEvents(i, worker,0);
+		}
+		else
+		{
+			struct event* ev = event_new(worker->event_base, worker->connections_v0[i]->sock, EV_WRITE|EV_PERSIST, sendCallback, worker);
+			event_priority_set(ev, 1);
+			event_add(ev, NULL);
+
+			ev = event_new(worker->event_base, worker->connections_v0[i]->sock, EV_READ|EV_PERSIST, receiveCallback, worker);
+			event_priority_set(ev, 2);
+			event_add(ev, NULL);
+		}
 	}//End for i
 
 	gettimeofday(&(worker->last_write_time), NULL);
 	
-	//TODO: delete
-	struct timeval five_seconds = {5,0};
-	struct event* ev = event_new(worker->event_base, -1, EV_TIMEOUT|EV_PERSIST, printCallback, NULL);
-	event_priority_set(ev, 1);
-	event_add(ev, &five_seconds);
-	struct timeval thirty_seconds = {30,0};
-	struct event* ev2 = event_new(worker->event_base, -1, EV_TIMEOUT|EV_PERSIST, printCallback2, worker);
-	event_priority_set(ev2, 1);
-	event_add(ev2, &thirty_seconds);
+	if (worker->config->tcp_failover)
+	{
+		//TODO: delete
+		struct timeval five_seconds = {5,0};
+		struct event* ev = event_new(worker->event_base, -1, EV_TIMEOUT|EV_PERSIST, printCallback, NULL);
+		event_priority_set(ev, 1);
+		event_add(ev, &five_seconds);
+		struct timeval thirty_seconds = {30,0};
+		struct event* ev2 = event_new(worker->event_base, -1, EV_TIMEOUT|EV_PERSIST, printCallback2, worker);
+		event_priority_set(ev2, 1);
+		event_add(ev2, &thirty_seconds);
+	}
 
 	printf("starting receive base loop\n");
 	//int error = event_base_loop(worker->event_base, 0);
@@ -85,7 +103,7 @@ int pushRequest(struct worker* worker, struct request* request) {
 
 	// printf("push: size %d head %d tail %d\n", worker->n_requests, worker->head, worker->tail);
 
-	if(worker->n_requests == QUEUE_SIZE){
+	if (worker->n_requests == QUEUE_SIZE) {
 		printf("Reached queue size max\n");
 		return 0;
 	}
@@ -118,13 +136,15 @@ void sendCallback(int fd, short eventType, void* args) {
 	//increaseEventsLiveSendEvCounter(fd, worker, worker->nEvents);
 	struct timeval timestamp, timediff, timeadd;
 	gettimeofday(&timestamp, NULL);
+
 	timersub(&timestamp, &(worker->last_write_time), &timediff);
 	double diff = timediff.tv_usec * 1e-6  + timediff.tv_sec;
+
 	struct int_dist* interarrival_dist = worker->config->interarrival_dist;
 	int interarrival_time  = 0;
 	//Null interarrival_dist means no waiting
-	if(interarrival_dist != NULL){
-		if(worker->interarrival_time <= 0){
+	if (interarrival_dist != NULL) {
+		if (worker->interarrival_time <= 0){
 			interarrival_time = getIntQuantile(interarrival_dist); //In microseconds
 			// printf("new interarrival_time %d\n", interarrival_time);
  			worker->interarrival_time = interarrival_time;
@@ -139,14 +159,15 @@ void sendCallback(int fd, short eventType, void* args) {
 
 	timeadd.tv_sec = 0; timeadd.tv_usec = interarrival_time; 
 	timeradd(&(worker->last_write_time), &timeadd, &(worker->last_write_time));
+
 	struct request* request = NULL;
-	if(worker->incr_fix_queue_tail != worker->incr_fix_queue_head) {
+	if (worker->incr_fix_queue_tail != worker->incr_fix_queue_head) {
 		request = worker->incr_fix_queue[worker->incr_fix_queue_head];
 		worker->incr_fix_queue_head = (worker->incr_fix_queue_head + 1) % INCR_FIX_QUEUE_SIZE;
 		// printf("fixing\n");
 	} else {
 		// printf(")preload %d warmup key %d\n", worker->config->pre_load, worker->warmup_key);
-		if(worker->config->pre_load == 1 && worker->warmup_key < 0) {
+		if (worker->config->pre_load == 1 && worker->warmup_key < 0) {
 			printf("here is how requests disappear\n");
 			return;
 		} else {
@@ -157,7 +178,7 @@ void sendCallback(int fd, short eventType, void* args) {
 	// printf("Generated SET request of size %d\n", request->value_size);
 	}
 
-	if( !pushRequest(worker, request) ) {
+	if (!pushRequest(worker, request)) {
 		//Queue is full, bail
 		printf("Full queue\n");
 		deleteRequest(request);
@@ -165,9 +186,12 @@ void sendCallback(int fd, short eventType, void* args) {
 	}
 	//sendWorkerRequest_sendCallback(request,worker, 0);
 	int sendResult = sendRequest(request);
-	if (sendResult == -1) {
-		printf("send request returned -1\n");
-		// deleteRequest(request);
+	if (worker->config->tcp_failover)
+	{
+		if (sendResult == -1) {
+			printf("send request returned -1\n");
+			// deleteRequest(request);
+		}
 	}
 }//End sendCallback()
 
@@ -225,42 +249,46 @@ void receiveCallback(int fd, short eventType, void* args) {
 	struct worker* worker = args;
 	//increaseEventsLiveReceiveEvCounter(fd, worker, worker->nEvents);
 	struct request* request = getNextRequest(worker);
-	if(request == NULL) { 
+	if (request == NULL) {
 		//printf("Error: Tried to get a null request, fd %d\n",fd);
 		//exit(-1);
 		//increaseOrDeleteEventsNullCounter(fd, worker, worker->nEvents);
 		return;
 	}
+
 	struct timeval readTimestamp, timediff;
 	gettimeofday(&readTimestamp, NULL);
 	timersub(&readTimestamp, &(request->send_time), &timediff);
 	double diff = timediff.tv_usec * 1e-6  + timediff.tv_sec;
 
 	int result = receiveResponse(request, diff);
-	if (result == -1)
+	if (worker->config->tcp_failover)
 	{
-		printf("receive Response returned -1\n");
-		/*
-		if( !pushRequest(worker, request) ) {
-		   //Queue is full, bail
-		   printf("Full queue\n");
-		   deleteRequest(request);
-		   return;  
-		}
-		printf("sending worker request in receive-callback, fd %d. iteration %d\n", request->connection->sock,0);
-		int res = sendWorkerRequest(request,worker, 0);
-		if (res != 1)
+		if (result == -1)
 		{
-		  return;
+			printf("receive Response returned -1\n");
+			/*
+			if( !pushRequest(worker, request) ) {
+			   //Queue is full, bail
+			   printf("Full queue\n");
+			   deleteRequest(request);
+			   return;
+			}
+			printf("sending worker request in receive-callback, fd %d. iteration %d\n", request->connection->sock,0);
+			int res = sendWorkerRequest(request,worker, 0);
+			if (res != 1)
+			{
+			  return;
+			}
+			*/
 		}
-		*/
 	}
 	// else
 	// {
 		deleteRequest(request);
 	// }
 	worker->received_warmup_keys++;
-	if(worker->config->pre_load == 1 && worker->config->dep_dist != NULL && worker->received_warmup_keys == worker->config->keysToPreload){
+	if (worker->config->pre_load == 1 && worker->config->dep_dist != NULL && worker->received_warmup_keys == worker->config->keysToPreload) {
 		printf("You are warmed up, sir\n");
 		exit(0);
 	}
@@ -310,7 +338,7 @@ void createWorkers(struct config* config) {
 
 	config->workers = malloc(sizeof(struct worker*)*config->n_workers);
 	int i;
-	for( i = 0; i < config->n_workers; i++) {
+	for (i = 0; i < config->n_workers; i++) {
 		config->workers[i] = createWorker(config, i);
 	}
 
@@ -320,23 +348,29 @@ void createWorkers(struct config* config) {
 	}
 
 	int total_connections = 0;
-	for(i = 0; i < config->n_workers; i++) {
+	for (i = 0; i < config->n_workers; i++) {
 		int num_worker_connections = config->n_connections_total/config->n_workers + (i < config->n_connections_total % config->n_workers);
 		total_connections += num_worker_connections;
 		printf("total_connections %d\n", total_connections);
 		config->workers[i]->connections_v0 = malloc(sizeof(struct conn*) * num_worker_connections);
-		config->workers[i]->connections_v1 = malloc(sizeof(struct conn*) * num_worker_connections);
-		config->workers[i]->connections_v2 = malloc(sizeof(struct conn*) * num_worker_connections);
-		config->workers[i]->connection_server = malloc(sizeof(int) * num_worker_connections);
-		config->workers[i]->connection_server_variant = malloc(sizeof(int) * num_worker_connections);
+		if (config->tcp_failover)
+		{
+			config->workers[i]->connections_v1 = malloc(sizeof(struct conn*) * num_worker_connections);
+			config->workers[i]->connections_v2 = malloc(sizeof(struct conn*) * num_worker_connections);
+			config->workers[i]->connection_server = malloc(sizeof(int) * num_worker_connections);
+			config->workers[i]->connection_server_variant = malloc(sizeof(int) * num_worker_connections);
+		}
 		config->workers[i]->nConnections = num_worker_connections;
 		config->workers[i]->received_warmup_keys = 0;
 		int j;
 		int server=i % config->n_servers; 
-		for(j = 0; j < num_worker_connections; j++) {
+		for (j = 0; j < num_worker_connections; j++) {
 			config->workers[i]->connections_v0[j] = createConnection(config->server_ip_address[server], config->server_port[server], config->protocol_mode, config->naggles);
-			config->workers[i]->connection_server[j] = server;
-			config->workers[i]->connection_server_variant[j] = 0; //0 - original, 1 - backup_1, 2 - backup_2
+			if (config->tcp_failover)
+			{
+				config->workers[i]->connection_server[j] = server;
+				config->workers[i]->connection_server_variant[j] = 0; //0 - original, 1 - backup_1, 2 - backup_2
+			}
 		}
 		int rc;
 		//Create receive thread

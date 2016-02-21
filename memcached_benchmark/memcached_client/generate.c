@@ -279,13 +279,20 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
   //Pick a random connection
   int connection_server = randomFunction(worker) % worker->nConnections;
   struct conn* conn;
-  if (worker->connection_server_variant[connection_server] == 0)
+  if (config->tcp_failover)
   {
-    conn = worker->connections_v0[connection_server];
-  } else if (worker->connection_server_variant[connection_server] == 1) {
-    conn = worker->connections_v1[connection_server];
-  } else {
-    conn = worker->connections_v2[connection_server];
+	  if (worker->connection_server_variant[connection_server] == 0)
+	  {
+		conn = worker->connections_v0[connection_server];
+	  } else if (worker->connection_server_variant[connection_server] == 1) {
+		conn = worker->connections_v1[connection_server];
+	  } else {
+		conn = worker->connections_v2[connection_server];
+	  }
+  }
+  else
+  {
+	  conn = worker->connections_v0[connection_server];
   }
 
   char* value = NULL;
@@ -293,12 +300,12 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
   char* key = NULL;
 
   int warmup_index = 0;
-  if(config->dep_dist != NULL) {
+  if (config->dep_dist != NULL) {
   //printf("generating..\n");
     struct dep_entry* dep_entry = NULL;
-    if(config->pre_load) {
+    if (config->pre_load) {
 
-      if(worker->warmup_key == -1) {
+      if (worker->warmup_key == -1) {
         printf("doh\n");
       }
       dep_entry = config->dep_dist->dep_entries[config->dep_dist->n_entries - worker->warmup_key_check-1];
@@ -325,10 +332,10 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
     valueSize = dep_entry->size;
   //printf("key %s valueSize %d\n", key, valueSize);
   //Pick a key
-  }else{
+  } else {
     int keyIndex = getIntQuantile(config->key_pop_dist);
     key = config->key_list->keys[keyIndex];
-    if(strlen(key) == 0){
+    if (strlen(key) == 0) {
       printf("zero length key: <%s> index %d\n", key, keyIndex);
     }
   }
@@ -413,7 +420,7 @@ struct request* generateRequest(struct config* config, struct worker* worker) {
     //It's a set
     op = SET;
     //Create a value
-    if(config->dep_dist == NULL){
+    if (config->dep_dist == NULL) {
       if(config->fixed_size > 0) {
         valueSize = config->fixed_size;
       } else {
