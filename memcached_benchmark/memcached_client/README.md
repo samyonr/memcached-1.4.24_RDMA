@@ -8,7 +8,8 @@ The following client is a modification of CloudSuite's client, and those is dist
 The modification of CloudSuite's client was developed by Samyon Ristov from Hebrew University of Jerusalem, under the supervision of Prof. Danny Dolev, Tal Anker and Yaron Weinsberg.
 
 Known Issues:
-- Events are only added (after a server goes down) and never deleted. Therefore the benchmark is not really scalable. To solve the issue deletion of the events should be added after a minute in case a server went down (or after many 'empty' events happened). The reason the events are not deleted immediately is because there are always some events in the queue that should be handled before the deletion.   
+- Events are only added (after a server goes down) and never deleted. Therefore the benchmark is not really scalable. To solve the issue deletion of the events should be added after a minute in case a server went down (or after many 'empty' events happened). The reason the events are not deleted immediately is because there are always some events in the queue that should be handled before the deletion.
+
 - In order of failover to work, all connections must TX at least once before server goes down.
 - "total misses" is always 0
 - There is a lot of logs during reconnection.
