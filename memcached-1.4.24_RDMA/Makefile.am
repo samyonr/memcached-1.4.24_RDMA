@@ -18,7 +18,8 @@ memcached_SOURCES = memcached.c memcached.h \
                     thread.c daemon.c \
                     stats.c stats.h \
                     util.c util.h \
-		    sharedmalloc.c sharedmalloc.h \
+		    		sharedmalloc.c sharedmalloc.h \
+		    		backup.c backup.h \
                     trace.h cache.h sasl_defs.h
 
 if BUILD_CACHE

@@ -98,7 +98,7 @@ subdir = .
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/configure $(am__configure_deps) \
 	$(srcdir)/config.h.in depcomp $(pkginclude_HEADERS) AUTHORS \
-	COPYING ChangeLog NEWS compile config.guess config.sub \
+	COPYING ChangeLog INSTALL NEWS compile config.guess config.sub \
 	install-sh missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/version.m4 \
@@ -117,8 +117,8 @@ am__memcached_SOURCES_DIST = memcached.c memcached.h hash.c hash.h \
 	jenkins_hash.c jenkins_hash.h murmur3_hash.c murmur3_hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
-	sharedmalloc.h trace.h cache.h sasl_defs.h cache.c \
-	solaris_priv.c sasl_defs.c
+	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
+	cache.c solaris_priv.c sasl_defs.c
 @BUILD_CACHE_TRUE@am__objects_1 = memcached-cache.$(OBJEXT)
 @BUILD_SOLARIS_PRIVS_TRUE@am__objects_2 =  \
 @BUILD_SOLARIS_PRIVS_TRUE@	memcached-solaris_priv.$(OBJEXT)
@@ -129,15 +129,15 @@ am_memcached_OBJECTS = memcached-memcached.$(OBJEXT) \
 	memcached-items.$(OBJEXT) memcached-assoc.$(OBJEXT) \
 	memcached-thread.$(OBJEXT) memcached-daemon.$(OBJEXT) \
 	memcached-stats.$(OBJEXT) memcached-util.$(OBJEXT) \
-	memcached-sharedmalloc.$(OBJEXT) $(am__objects_1) \
-	$(am__objects_2) $(am__objects_3)
+	memcached-sharedmalloc.$(OBJEXT) memcached-backup.$(OBJEXT) \
+	$(am__objects_1) $(am__objects_2) $(am__objects_3)
 memcached_OBJECTS = $(am_memcached_OBJECTS)
 am__memcached_debug_SOURCES_DIST = memcached.c memcached.h hash.c \
 	hash.h jenkins_hash.c jenkins_hash.h murmur3_hash.c \
 	murmur3_hash.h slabs.c slabs.h items.c items.h assoc.c assoc.h \
 	thread.c daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
-	sharedmalloc.h trace.h cache.h sasl_defs.h cache.c \
-	solaris_priv.c sasl_defs.c
+	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
+	cache.c solaris_priv.c sasl_defs.c
 @BUILD_CACHE_TRUE@am__objects_4 = memcached_debug-cache.$(OBJEXT)
 @BUILD_SOLARIS_PRIVS_TRUE@am__objects_5 = memcached_debug-solaris_priv.$(OBJEXT)
 @ENABLE_SASL_TRUE@am__objects_6 = memcached_debug-sasl_defs.$(OBJEXT)
@@ -151,7 +151,8 @@ am__objects_7 = memcached_debug-memcached.$(OBJEXT) \
 	memcached_debug-thread.$(OBJEXT) \
 	memcached_debug-daemon.$(OBJEXT) \
 	memcached_debug-stats.$(OBJEXT) memcached_debug-util.$(OBJEXT) \
-	memcached_debug-sharedmalloc.$(OBJEXT) $(am__objects_4) \
+	memcached_debug-sharedmalloc.$(OBJEXT) \
+	memcached_debug-backup.$(OBJEXT) $(am__objects_4) \
 	$(am__objects_5) $(am__objects_6)
 am_memcached_debug_OBJECTS = $(am__objects_7)
 memcached_debug_OBJECTS = $(am_memcached_debug_OBJECTS)
@@ -433,8 +434,8 @@ memcached_SOURCES = memcached.c memcached.h hash.c hash.h \
 	jenkins_hash.c jenkins_hash.h murmur3_hash.c murmur3_hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
-	sharedmalloc.h trace.h cache.h sasl_defs.h $(am__append_1) \
-	$(am__append_3) $(am__append_4)
+	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
+	$(am__append_1) $(am__append_3) $(am__append_4)
 memcached_debug_SOURCES = $(memcached_SOURCES)
 memcached_CPPFLAGS = -DNDEBUG
 memcached_debug_LDADD = @PROFILER_LDFLAGS@ $(am__append_9)
@@ -575,6 +576,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cache.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-assoc.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-backup.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-cache.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-daemon.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-hash.Po@am__quote@
@@ -590,6 +592,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-thread.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached-util.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached_debug-assoc.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached_debug-backup.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached_debug-cache.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached_debug-daemon.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memcached_debug-hash.Po@am__quote@
@@ -790,6 +793,20 @@ memcached-sharedmalloc.obj: sharedmalloc.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sharedmalloc.c' object='memcached-sharedmalloc.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-sharedmalloc.obj `if test -f 'sharedmalloc.c'; then $(CYGPATH_W) 'sharedmalloc.c'; else $(CYGPATH_W) '$(srcdir)/sharedmalloc.c'; fi`
+
+memcached-backup.o: backup.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-backup.o -MD -MP -MF $(DEPDIR)/memcached-backup.Tpo -c -o memcached-backup.o `test -f 'backup.c' || echo '$(srcdir)/'`backup.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-backup.Tpo $(DEPDIR)/memcached-backup.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='backup.c' object='memcached-backup.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-backup.o `test -f 'backup.c' || echo '$(srcdir)/'`backup.c
+
+memcached-backup.obj: backup.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-backup.obj -MD -MP -MF $(DEPDIR)/memcached-backup.Tpo -c -o memcached-backup.obj `if test -f 'backup.c'; then $(CYGPATH_W) 'backup.c'; else $(CYGPATH_W) '$(srcdir)/backup.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-backup.Tpo $(DEPDIR)/memcached-backup.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='backup.c' object='memcached-backup.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-backup.obj `if test -f 'backup.c'; then $(CYGPATH_W) 'backup.c'; else $(CYGPATH_W) '$(srcdir)/backup.c'; fi`
 
 memcached-cache.o: cache.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-cache.o -MD -MP -MF $(DEPDIR)/memcached-cache.Tpo -c -o memcached-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c
@@ -1000,6 +1017,20 @@ memcached_debug-sharedmalloc.obj: sharedmalloc.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sharedmalloc.c' object='memcached_debug-sharedmalloc.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-sharedmalloc.obj `if test -f 'sharedmalloc.c'; then $(CYGPATH_W) 'sharedmalloc.c'; else $(CYGPATH_W) '$(srcdir)/sharedmalloc.c'; fi`
+
+memcached_debug-backup.o: backup.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-backup.o -MD -MP -MF $(DEPDIR)/memcached_debug-backup.Tpo -c -o memcached_debug-backup.o `test -f 'backup.c' || echo '$(srcdir)/'`backup.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-backup.Tpo $(DEPDIR)/memcached_debug-backup.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='backup.c' object='memcached_debug-backup.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-backup.o `test -f 'backup.c' || echo '$(srcdir)/'`backup.c
+
+memcached_debug-backup.obj: backup.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-backup.obj -MD -MP -MF $(DEPDIR)/memcached_debug-backup.Tpo -c -o memcached_debug-backup.obj `if test -f 'backup.c'; then $(CYGPATH_W) 'backup.c'; else $(CYGPATH_W) '$(srcdir)/backup.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-backup.Tpo $(DEPDIR)/memcached_debug-backup.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='backup.c' object='memcached_debug-backup.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-backup.obj `if test -f 'backup.c'; then $(CYGPATH_W) 'backup.c'; else $(CYGPATH_W) '$(srcdir)/backup.c'; fi`
 
 memcached_debug-cache.o: cache.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-cache.o -MD -MP -MF $(DEPDIR)/memcached_debug-cache.Tpo -c -o memcached_debug-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c

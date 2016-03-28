@@ -15,6 +15,7 @@
  */
 #include "memcached.h"
 #include "sharedmalloc.h"
+#include "backup.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -107,6 +108,7 @@ struct settings settings;
 void *failoverManagerMsg;
 time_t process_started;     /* when the process was started */
 conn **conns;
+char** g_backup_addr;
 
 struct slab_rebalance slab_rebal;
 volatile int slab_rebalance_signal;
@@ -947,17 +949,27 @@ static void complete_nread_ascii(conn *c) {
       switch (ret) {
       case STORED:
           out_string(c, "STORED");
+          /*
           if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
           {
-              /* notify the FailoverManager about item store */
-              /* TODO: check that the item is fully stored - key and value */
+              // notify the FailoverManager about item store
+              // TODO: check that the item is fully stored - key and value
               fprintf(stderr, "writing true to failoverManagerMsg\n");
               if (failoverManagerMsg == NULL)
               {
                   fprintf(stderr, "failoverManagerMsg is null before set\n");
               }
-              memset(failoverManagerMsg, 116 /* 116 in ascii is 't' for 'true' */, 1); /* TODO: update in a better way - by date or counter or something */
+              memset(failoverManagerMsg, 116 , 1); // 116 in ascii is 't' for 'true' TODO: update in a better way - by date or counter or something
               fprintf(stderr, "writing true to failoverManagerMsg - COMPLETED\n");
+          }
+      	  */
+          if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
+          {
+              /* notify the FailoverManager about item store */
+              /* TODO: check that the item is fully stored - key and value */
+              fprintf(stderr, "writing to backup client\n");
+              sendBackupToClients();
+              fprintf(stderr, "writing to backup client - COMPLETED\n");
           }
           break;
       case EXISTS:
@@ -5540,6 +5552,40 @@ int main (int argc, char **argv) {
         }
     }
 
+    if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
+    {
+    	BackupServer();
+    	sleep(2);
+		printf("Backup IPs=[%s]\n", settings.failover_manager_key);
+
+		g_backup_addr = str_split(settings.failover_manager_key, ' ');
+
+		if (g_backup_addr)
+		{
+			int i;
+			for (i = 0; *(g_backup_addr + i); i++)
+			{
+				printf("IP=[%s]\n", *(g_backup_addr + i));
+				printf("connecting\n");
+				if (BackupClient(*(g_backup_addr + i)) == 0)
+				{
+					printf("connected\n");
+					//int numbytes;
+					//char buf[100];
+					//receive(sockfd, buf, &numbytes);
+				}
+				else
+				{
+					printf("failed to connect\n");
+				}
+
+				//free(*(g_backup_addr + i));
+			}
+			//free(g_backup_addr);
+		}
+        //BackupServer();
+    }
+
     if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.failover_manager)
     {
         fprintf(stderr, "mapping failoverManagerMsg\n");
@@ -5682,7 +5728,6 @@ int main (int argc, char **argv) {
 
     /* initialize main thread libevent instance */
     main_base = event_init();
-
     /* initialize other stuff */
     stats_init();
     assoc_init(settings.hashpower_init);

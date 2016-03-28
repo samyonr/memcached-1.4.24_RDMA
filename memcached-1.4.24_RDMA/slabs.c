@@ -106,7 +106,6 @@ unsigned int slabs_clsid(const size_t size) {
 void slabs_init(const size_t limit, const double factor, const bool prealloc) {
     int i = POWER_SMALLEST - 1;
     unsigned int size = sizeof(item) + settings.chunk_size;
-
     mem_limit = limit;
 
     if (prealloc) {
@@ -131,7 +130,6 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
     }
 
     memset(slabclass, 0, sizeof(slabclass));
-
     while (++i < MAX_NUMBER_OF_SLAB_CLASSES-1 && size <= settings.item_size_max / factor) {
         /* Make sure items are always n-byte aligned */
         if (size % CHUNK_ALIGN_BYTES)
@@ -153,7 +151,6 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
         fprintf(stderr, "slab class %3d: chunk size %9u perslab %7u\n",
                 i, slabclass[i].size, slabclass[i].perslab);
     }
-
     /* for the test suite:  faking of how much we've already malloc'd */
     {
         char *t_initial_malloc = getenv("T_MEMD_INITIAL_MALLOC");
@@ -162,7 +159,6 @@ void slabs_init(const size_t limit, const double factor, const bool prealloc) {
         }
 
     }
-
     if (prealloc) {
         slabs_preallocate(power_largest);
     }
