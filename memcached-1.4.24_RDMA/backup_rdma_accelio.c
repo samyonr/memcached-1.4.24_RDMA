@@ -44,14 +44,21 @@
 #include <string.h>
 #include <inttypes.h>
 #include <errno.h>
+#include <pthread.h>
 
+#include "backup_rdma_accelio.h"
 #include "libxio.h"
+
+void *RunBackupServerRDMA(void *arg);
 
 #define QUEUE_DEPTH		512
 #define PRINT_COUNTER		4000000
 #define DISCONNECT_NR		(2 * PRINT_COUNTER)
 
+static pthread_t g_serverThread;
 int test_disconnect;
+
+
 
 /* server private data */
 struct server_data {
@@ -223,4 +230,85 @@ static struct xio_session_ops  server_ops __attribute__ ((unused)) = {
 /*---------------------------------------------------------------------------*/
 /* main									     */
 /*---------------------------------------------------------------------------*/
+int BackupServerRDMA(void)
+{
+	int rv;
+    //Create backup server thread
+    rv = pthread_create(&g_serverThread, NULL, RunBackupServerRDMA, NULL);
+    if(rv < 0)
+    {
+    	printf("Error creating backup server thread\n");
+    }
+    return 0;
+}
 
+
+void *RunBackupServerRDMA(void *arg)
+{
+	struct xio_server	*server;	/* server portal */
+	struct server_data	server_data;
+	char			url[256];
+	struct	xio_msg		*rsp;
+	int			i;
+
+	/* initialize library */
+	xio_init();
+
+	/* create "hello world" message */
+	memset(&server_data, 0, sizeof(server_data));
+	rsp = server_data.rsp_ring;
+	for (i = 0; i < QUEUE_DEPTH; i++) {
+		rsp->out.header.iov_base =
+			strdup("hello world header response");
+		rsp->out.header.iov_len =
+			strlen((const char *)
+				rsp->out.header.iov_base) + 1;
+
+		rsp->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+		rsp->out.data_iov.max_nents = XIO_IOVLEN;
+
+		rsp->out.data_iov.sglist[0].iov_base =
+			strdup("hello world data response");
+
+		rsp->out.data_iov.sglist[0].iov_len =
+			strlen((const char *)
+			       rsp->out.data_iov.sglist[0].iov_base) + 1;
+		rsp->out.data_iov.nents = 1;
+		rsp++;
+	}
+
+	/* create thread context for the client */
+	server_data.ctx	= xio_context_create(NULL, 0, -1);
+
+	/* create url to connect to */
+	sprintf(url, "rdma://%s:%s", "10.0.0.1", "5555");//TODO: make configurable
+
+	/* bind a listener server to a portal/url */
+	server = xio_bind(server_data.ctx, &server_ops,
+			  url, NULL, 0, &server_data);
+	if (server) {
+		printf("listen to %s\n", url);
+		xio_context_run_loop(server_data.ctx, XIO_INFINITE);
+
+		/* normal exit phase */
+		fprintf(stdout, "exit signaled\n");
+
+		/* free the server */
+		xio_unbind(server);
+	}
+
+	/* free the message */
+	rsp = server_data.rsp_ring;
+	for (i = 0; i < QUEUE_DEPTH; i++) {
+		free(rsp->out.header.iov_base);
+		free(rsp->out.data_iov.sglist[0].iov_base);
+		rsp++;
+	}
+
+	/* free the context */
+	xio_context_destroy(server_data.ctx);
+
+	xio_shutdown();
+
+	exit(0);
+}

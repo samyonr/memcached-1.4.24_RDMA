@@ -10,6 +10,6 @@
 
 
 
-
+int BackupServerRDMA(void);
 
 #endif /* BACKUP_RDMA_ACCELIO_H_ */

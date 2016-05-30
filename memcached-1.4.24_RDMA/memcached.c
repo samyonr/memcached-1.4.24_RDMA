@@ -15,6 +15,7 @@
  */
 #include "memcached.h"
 #include "sharedmalloc.h"
+#include "backup_rdma_accelio.h"
 #include "backup.h"
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -146,6 +147,7 @@ static void maxconns_handler(const int fd, const short which, void *arg) {
         evtimer_del(&maxconnsevent);
         accept_new_conns(true);
     }
+
 }
 
 #define REALTIME_MAXDELTA 60*60*24*30
@@ -5554,6 +5556,12 @@ int main (int argc, char **argv) {
 
     if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
     {
+    	printf("Backup IPs=[%s]\n", settings.failover_manager_key);
+    	BackupServerRDMA();
+    }
+    /*
+    if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
+    {
     	BackupServer();
     	sleep(2);
 		printf("Backup IPs=[%s]\n", settings.failover_manager_key);
@@ -5585,6 +5593,7 @@ int main (int argc, char **argv) {
 		}
         //BackupServer();
     }
+    */
 
     if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.failover_manager)
     {
