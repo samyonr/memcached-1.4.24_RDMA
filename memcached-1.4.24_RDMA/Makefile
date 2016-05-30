@@ -118,7 +118,8 @@ am__memcached_SOURCES_DIST = memcached.c memcached.h hash.c hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
 	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
-	cache.c solaris_priv.c sasl_defs.c
+	backup_rdma_accelio.c backup_rdma_accelio.h cache.c \
+	solaris_priv.c sasl_defs.c
 am__objects_1 = memcached-cache.$(OBJEXT)
 #am__objects_2 =  \
 #	memcached-solaris_priv.$(OBJEXT)
@@ -130,14 +131,16 @@ am_memcached_OBJECTS = memcached-memcached.$(OBJEXT) \
 	memcached-thread.$(OBJEXT) memcached-daemon.$(OBJEXT) \
 	memcached-stats.$(OBJEXT) memcached-util.$(OBJEXT) \
 	memcached-sharedmalloc.$(OBJEXT) memcached-backup.$(OBJEXT) \
-	$(am__objects_1) $(am__objects_2) $(am__objects_3)
+	memcached-backup_rdma_accelio.$(OBJEXT) $(am__objects_1) \
+	$(am__objects_2) $(am__objects_3)
 memcached_OBJECTS = $(am_memcached_OBJECTS)
 am__memcached_debug_SOURCES_DIST = memcached.c memcached.h hash.c \
 	hash.h jenkins_hash.c jenkins_hash.h murmur3_hash.c \
 	murmur3_hash.h slabs.c slabs.h items.c items.h assoc.c assoc.h \
 	thread.c daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
 	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
-	cache.c solaris_priv.c sasl_defs.c
+	backup_rdma_accelio.c backup_rdma_accelio.h cache.c \
+	solaris_priv.c sasl_defs.c
 am__objects_4 = memcached_debug-cache.$(OBJEXT)
 #am__objects_5 = memcached_debug-solaris_priv.$(OBJEXT)
 #am__objects_6 = memcached_debug-sasl_defs.$(OBJEXT)
@@ -152,7 +155,8 @@ am__objects_7 = memcached_debug-memcached.$(OBJEXT) \
 	memcached_debug-daemon.$(OBJEXT) \
 	memcached_debug-stats.$(OBJEXT) memcached_debug-util.$(OBJEXT) \
 	memcached_debug-sharedmalloc.$(OBJEXT) \
-	memcached_debug-backup.$(OBJEXT) $(am__objects_4) \
+	memcached_debug-backup.$(OBJEXT) \
+	memcached_debug-backup_rdma_accelio.$(OBJEXT) $(am__objects_4) \
 	$(am__objects_5) $(am__objects_6)
 am_memcached_debug_OBJECTS = $(am__objects_7)
 memcached_debug_OBJECTS = $(am_memcached_debug_OBJECTS)
@@ -430,12 +434,14 @@ pkginclude_HEADERS = protocol_binary.h
 BUILT_SOURCES = $(am__append_5)
 testapp_SOURCES = testapp.c util.c util.h $(am__append_2)
 timedrun_SOURCES = timedrun.c
+AM_LDFLAGS = -lxio
 memcached_SOURCES = memcached.c memcached.h hash.c hash.h \
 	jenkins_hash.c jenkins_hash.h murmur3_hash.c murmur3_hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
 	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
-	$(am__append_1) $(am__append_3) $(am__append_4)
+	backup_rdma_accelio.c backup_rdma_accelio.h $(am__append_1) \
+	$(am__append_3) $(am__append_4)
 memcached_debug_SOURCES = $(memcached_SOURCES)
 memcached_CPPFLAGS = -DNDEBUG
 memcached_debug_LDADD = -lgcov $(am__append_9)
@@ -577,6 +583,7 @@ distclean-compile:
 include ./$(DEPDIR)/cache.Po
 include ./$(DEPDIR)/memcached-assoc.Po
 include ./$(DEPDIR)/memcached-backup.Po
+include ./$(DEPDIR)/memcached-backup_rdma_accelio.Po
 include ./$(DEPDIR)/memcached-cache.Po
 include ./$(DEPDIR)/memcached-daemon.Po
 include ./$(DEPDIR)/memcached-hash.Po
@@ -593,6 +600,7 @@ include ./$(DEPDIR)/memcached-thread.Po
 include ./$(DEPDIR)/memcached-util.Po
 include ./$(DEPDIR)/memcached_debug-assoc.Po
 include ./$(DEPDIR)/memcached_debug-backup.Po
+include ./$(DEPDIR)/memcached_debug-backup_rdma_accelio.Po
 include ./$(DEPDIR)/memcached_debug-cache.Po
 include ./$(DEPDIR)/memcached_debug-daemon.Po
 include ./$(DEPDIR)/memcached_debug-hash.Po
@@ -807,6 +815,20 @@ memcached-backup.obj: backup.c
 #	$(AM_V_CC)source='backup.c' object='memcached-backup.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-backup.obj `if test -f 'backup.c'; then $(CYGPATH_W) 'backup.c'; else $(CYGPATH_W) '$(srcdir)/backup.c'; fi`
+
+memcached-backup_rdma_accelio.o: backup_rdma_accelio.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-backup_rdma_accelio.o -MD -MP -MF $(DEPDIR)/memcached-backup_rdma_accelio.Tpo -c -o memcached-backup_rdma_accelio.o `test -f 'backup_rdma_accelio.c' || echo '$(srcdir)/'`backup_rdma_accelio.c
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-backup_rdma_accelio.Tpo $(DEPDIR)/memcached-backup_rdma_accelio.Po
+#	$(AM_V_CC)source='backup_rdma_accelio.c' object='memcached-backup_rdma_accelio.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-backup_rdma_accelio.o `test -f 'backup_rdma_accelio.c' || echo '$(srcdir)/'`backup_rdma_accelio.c
+
+memcached-backup_rdma_accelio.obj: backup_rdma_accelio.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-backup_rdma_accelio.obj -MD -MP -MF $(DEPDIR)/memcached-backup_rdma_accelio.Tpo -c -o memcached-backup_rdma_accelio.obj `if test -f 'backup_rdma_accelio.c'; then $(CYGPATH_W) 'backup_rdma_accelio.c'; else $(CYGPATH_W) '$(srcdir)/backup_rdma_accelio.c'; fi`
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-backup_rdma_accelio.Tpo $(DEPDIR)/memcached-backup_rdma_accelio.Po
+#	$(AM_V_CC)source='backup_rdma_accelio.c' object='memcached-backup_rdma_accelio.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-backup_rdma_accelio.obj `if test -f 'backup_rdma_accelio.c'; then $(CYGPATH_W) 'backup_rdma_accelio.c'; else $(CYGPATH_W) '$(srcdir)/backup_rdma_accelio.c'; fi`
 
 memcached-cache.o: cache.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-cache.o -MD -MP -MF $(DEPDIR)/memcached-cache.Tpo -c -o memcached-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c
@@ -1031,6 +1053,20 @@ memcached_debug-backup.obj: backup.c
 #	$(AM_V_CC)source='backup.c' object='memcached_debug-backup.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-backup.obj `if test -f 'backup.c'; then $(CYGPATH_W) 'backup.c'; else $(CYGPATH_W) '$(srcdir)/backup.c'; fi`
+
+memcached_debug-backup_rdma_accelio.o: backup_rdma_accelio.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-backup_rdma_accelio.o -MD -MP -MF $(DEPDIR)/memcached_debug-backup_rdma_accelio.Tpo -c -o memcached_debug-backup_rdma_accelio.o `test -f 'backup_rdma_accelio.c' || echo '$(srcdir)/'`backup_rdma_accelio.c
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-backup_rdma_accelio.Tpo $(DEPDIR)/memcached_debug-backup_rdma_accelio.Po
+#	$(AM_V_CC)source='backup_rdma_accelio.c' object='memcached_debug-backup_rdma_accelio.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-backup_rdma_accelio.o `test -f 'backup_rdma_accelio.c' || echo '$(srcdir)/'`backup_rdma_accelio.c
+
+memcached_debug-backup_rdma_accelio.obj: backup_rdma_accelio.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-backup_rdma_accelio.obj -MD -MP -MF $(DEPDIR)/memcached_debug-backup_rdma_accelio.Tpo -c -o memcached_debug-backup_rdma_accelio.obj `if test -f 'backup_rdma_accelio.c'; then $(CYGPATH_W) 'backup_rdma_accelio.c'; else $(CYGPATH_W) '$(srcdir)/backup_rdma_accelio.c'; fi`
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-backup_rdma_accelio.Tpo $(DEPDIR)/memcached_debug-backup_rdma_accelio.Po
+#	$(AM_V_CC)source='backup_rdma_accelio.c' object='memcached_debug-backup_rdma_accelio.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-backup_rdma_accelio.obj `if test -f 'backup_rdma_accelio.c'; then $(CYGPATH_W) 'backup_rdma_accelio.c'; else $(CYGPATH_W) '$(srcdir)/backup_rdma_accelio.c'; fi`
 
 memcached_debug-cache.o: cache.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-cache.o -MD -MP -MF $(DEPDIR)/memcached_debug-cache.Tpo -c -o memcached_debug-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c

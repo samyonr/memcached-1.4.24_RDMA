@@ -8,6 +8,9 @@ testapp_SOURCES = testapp.c util.c util.h
 
 timedrun_SOURCES = timedrun.c
 
+AM_LDFLAGS = -lxio
+
+
 memcached_SOURCES = memcached.c memcached.h \
                     hash.c hash.h \
                     jenkins_hash.c jenkins_hash.h \
@@ -20,7 +23,9 @@ memcached_SOURCES = memcached.c memcached.h \
                     util.c util.h \
 		    		sharedmalloc.c sharedmalloc.h \
 		    		backup.c backup.h \
-                    trace.h cache.h sasl_defs.h
+                    trace.h cache.h sasl_defs.h \
+                    backup_rdma_accelio.c \ 
+                    backup_rdma_accelio.h
 
 if BUILD_CACHE
 memcached_SOURCES += cache.c
