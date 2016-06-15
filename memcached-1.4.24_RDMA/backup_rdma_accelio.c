@@ -50,15 +50,35 @@
 #include "libxio.h"
 
 void *RunBackupServerRDMA(void *arg);
+int rdma_load_file_to_memory(const char *filename, char **result);
+int connectToRDMAServer(void);
+static int on_session_event_client(struct xio_session *session,
+			    struct xio_session_event_data *event_data,
+			    void *cb_user_context);
+static int on_response_client(struct xio_session *session, struct xio_msg *rsp,
+		       int last_in_rxq,
+		       void *cb_user_context);
+static int on_session_event_server(struct xio_session *session,
+			    struct xio_session_event_data *event_data,
+			    void *cb_user_context);
+static int on_new_session_server(struct xio_session *session,
+			  struct xio_new_session_req *req,
+			  void *cb_user_context);
+static int on_request_server(struct xio_session *session,
+		      struct xio_msg *req,
+		      int last_in_rxq,
+		      void *cb_user_context);
 
 #define QUEUE_DEPTH		512
 #define PRINT_COUNTER		4000000
 #define DISCONNECT_NR		(2 * PRINT_COUNTER)
 
+#define MAX_RDMA_BACKUPS	3
+
 static pthread_t g_serverThread;
 int test_disconnect;
-
-
+int g_backups_RDMA_count = 0;
+int g_queue_depth;
 
 /* server private data */
 struct server_data {
@@ -69,25 +89,183 @@ struct server_data {
 	int			pad;
 	int			ring_cnt;
 	struct xio_msg		rsp_ring[QUEUE_DEPTH];	/* global message */
+	struct xio_msg		single_rsp;
 };
+
+static struct xio_session_ops ses_ops = {
+	.on_session_event		=  on_session_event_client,
+	.on_session_established		=  NULL,
+	.on_msg				=  on_response_client,
+	.on_msg_error			=  NULL
+};
+
+struct session_data {
+	struct xio_context	*ctx;
+	struct xio_connection	*conn;
+	uint64_t		cnt;
+	uint64_t		nsent;
+	uint64_t		nrecv;
+	uint64_t		pad;
+	struct xio_msg		req_ring[QUEUE_DEPTH];
+};
+
+/*---------------------------------------------------------------------------*/
+/* on_session_event							     */
+/*---------------------------------------------------------------------------*/
+static int on_session_event_client(struct xio_session *session,
+			    struct xio_session_event_data *event_data,
+			    void *cb_user_context)
+{
+	struct session_data *session_data = (struct session_data *)
+						cb_user_context;
+
+	printf("session event: %s. reason: %s\n",
+	       xio_session_event_str(event_data->event),
+	       xio_strerror(event_data->reason));
+
+	switch (event_data->event) {
+	case XIO_SESSION_CONNECTION_TEARDOWN_EVENT:
+		xio_connection_destroy(event_data->conn);
+		break;
+	case XIO_SESSION_TEARDOWN_EVENT:
+		xio_session_destroy(session);
+		xio_context_stop_loop(session_data->ctx);  /* exit */
+		break;
+	default:
+		break;
+	};
+	return 0;
+}
+
+static void process_response_client(struct session_data *session_data,
+			     struct xio_msg *rsp)
+{
+	if (++session_data->cnt == PRINT_COUNTER) {
+		struct xio_iovec_ex	*isglist = vmsg_sglist(&rsp->in);
+		int			inents = vmsg_sglist_nents(&rsp->in);
+
+		printf("message: [%llu] - %s\n",
+		       (unsigned long long)(rsp->request->sn + 1),
+		       (char *)rsp->in.header.iov_base);
+		printf("message: [%llu] - %s\n",
+		       (unsigned long long)(rsp->request->sn + 1),
+		       (char *)(inents > 0 ? isglist[0].iov_base : NULL));
+		session_data->cnt = 0;
+	}
+}
+
+static int on_response_client(struct xio_session *session,
+		       struct xio_msg *rsp,
+		       int last_in_rxq,
+		       void *cb_user_context)
+{
+	struct session_data *session_data = (struct session_data *)
+						cb_user_context;
+	struct xio_msg	    *req = rsp;
+
+	session_data->nrecv++;
+	/* process the incoming message */
+	process_response_client(session_data, rsp);
+
+	/* acknowledge xio that response is no longer needed */
+	xio_release_response(rsp);
+
+	if (test_disconnect) {
+		if (session_data->nrecv == DISCONNECT_NR) {
+			xio_disconnect(session_data->conn);
+			return 0;
+		}
+		if (session_data->nsent == DISCONNECT_NR)
+			return 0;
+	}
+	req->in.header.iov_base	  = NULL;
+	req->in.header.iov_len	  = 0;
+	vmsg_sglist_set_nents(&req->in, 0);
+
+	/* resend the message */
+	xio_send_request(session_data->conn, req);
+	session_data->nsent++;
+
+	return 0;
+}
+
+
+int rdma_load_file_to_memory(const char *filename, char **result)
+{
+	int size = 0;
+	FILE *f = fopen(filename, "rb");
+	if (f == NULL)
+	{
+		*result = NULL;
+		return -1; // -1 means file opening fail
+	}
+	fseek(f, 0, SEEK_END);
+	size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	*result = (char *)malloc(size+1);
+	if (size != fread(*result, sizeof(char), size, f))
+	{
+		free(*result);
+		return -2; // -2 means file reading fail
+	}
+	fclose(f);
+	(*result)[size] = 0;
+	free(*result);
+	return size;
+}
 
 /*---------------------------------------------------------------------------*/
 /* ring_get_next_msg							     */
 /*---------------------------------------------------------------------------*/
 static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 {
-	struct xio_msg	*msg = &sd->rsp_ring[sd->ring_cnt++];
+	//struct xio_msg	*msg = &sd->rsp_ring[sd->ring_cnt++];
+	struct xio_msg *msg = &sd->single_rsp;
+	long size;
+	//char *content;
 
+	free(msg->out.header.iov_base);
+	free(msg->out.data_iov.sglist[0].iov_base);
+
+
+	msg->out.header.iov_base =
+		strdup("send slabs_lists_key1 header");
+	msg->out.header.iov_len =
+		strlen((const char *)
+			msg->out.header.iov_base) + 1;
+
+	msg->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+	msg->out.data_iov.max_nents = XIO_IOVLEN;
+
+
+	size = 0;
+	//rdma_load_file_to_memory("/tmp/memkey/slabs_lists_key1", &content);
+	if (size < 0)
+	{
+		puts("Error loading file");
+		exit(0);
+	}
+
+
+	msg->out.data_iov.sglist[0].iov_base =
+				strdup("send slabs_lists_key1 body");
+
+	msg->out.data_iov.sglist[0].iov_len =
+		strlen((const char *)
+			msg->out.data_iov.sglist[0].iov_base) + 1;
+	msg->out.data_iov.nents = 1;
+	//free(content);
+/*
 	if (sd->ring_cnt == QUEUE_DEPTH)
 		sd->ring_cnt = 0;
-
+*/
 	return msg;
 }
 
 /*---------------------------------------------------------------------------*/
 /* process_request							     */
 /*---------------------------------------------------------------------------*/
-static void process_request(struct server_data *server_data,
+static void process_request_server(struct server_data *server_data,
 			    struct xio_msg *req)
 {
 	struct xio_iovec_ex	*sglist = vmsg_sglist(&req->in);
@@ -135,9 +313,9 @@ static void process_request(struct server_data *server_data,
 }
 
 /*---------------------------------------------------------------------------*/
-/* on_session_event							     */
+/* on_session_event	server						     */
 /*---------------------------------------------------------------------------*/
-static int on_session_event(struct xio_session *session,
+static int on_session_event_server(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context)
 {
@@ -170,7 +348,7 @@ static int on_session_event(struct xio_session *session,
 /*---------------------------------------------------------------------------*/
 /* on_new_session							     */
 /*---------------------------------------------------------------------------*/
-static int on_new_session(struct xio_session *session,
+static int on_new_session_server(struct xio_session *session,
 			  struct xio_new_session_req *req,
 			  void *cb_user_context)
 {
@@ -190,7 +368,7 @@ static int on_new_session(struct xio_session *session,
 /*---------------------------------------------------------------------------*/
 /* on_request callback							     */
 /*---------------------------------------------------------------------------*/
-static int on_request(struct xio_session *session,
+static int on_request_server(struct xio_session *session,
 		      struct xio_msg *req,
 		      int last_in_rxq,
 		      void *cb_user_context)
@@ -199,7 +377,7 @@ static int on_request(struct xio_session *session,
 	struct xio_msg	   *rsp = ring_get_next_msg(server_data);
 
 	/* process request */
-	process_request(server_data, req);
+	process_request_server(server_data, req);
 
 	/* attach request to response */
 	rsp->request = req;
@@ -220,10 +398,10 @@ static int on_request(struct xio_session *session,
 /* asynchronous callbacks						     */
 /*---------------------------------------------------------------------------*/
 static struct xio_session_ops  server_ops __attribute__ ((unused)) = {
-	.on_session_event		=  on_session_event,
-	.on_new_session			=  on_new_session,
+	.on_session_event		=  on_session_event_server,
+	.on_new_session			=  on_new_session_server,
 	.on_msg_send_complete		=  NULL,
-	.on_msg				=  on_request,
+	.on_msg				=  on_request_server,
 	.on_msg_error			=  NULL
 };
 
@@ -311,4 +489,128 @@ void *RunBackupServerRDMA(void *arg)
 	xio_shutdown();
 
 	exit(0);
+}
+
+int BackupClientRDMA()
+{
+	if (g_backups_RDMA_count >= MAX_RDMA_BACKUPS)
+	{
+		printf("Maximal number of backups reached\n");
+		return -1;
+	}
+
+    if (connectToRDMAServer() == 0)
+    {
+    	g_backups_RDMA_count++;
+        return 0;
+    }
+    else
+    {
+    	printf("Error creating client connection\n");
+    	return -1;
+    }
+}
+
+int connectToRDMAServer()
+{
+	struct xio_session		*session;
+	char				url[256];
+	struct session_data		session_data;
+	int				i = 0, opt, optlen;
+	struct xio_session_params	params;
+	struct xio_connection_params	cparams;
+	struct xio_msg			*req;
+
+
+	test_disconnect = 0;
+
+	memset(&session_data, 0, sizeof(session_data));
+	memset(&params, 0, sizeof(params));
+	memset(&cparams, 0, sizeof(cparams));
+
+	/* initialize library */
+	xio_init();
+
+	/* get minimal queue depth */
+	xio_get_opt(NULL, XIO_OPTLEVEL_ACCELIO,
+		    XIO_OPTNAME_SND_QUEUE_DEPTH_MSGS,
+		    &opt, &optlen);
+	g_queue_depth = QUEUE_DEPTH > opt ? opt : QUEUE_DEPTH;
+
+	/* create thread context for the client */
+	session_data.ctx = xio_context_create(NULL, 0, -1);
+
+	/* create url to connect to */
+	sprintf(url, "rdma://%s:%s", "10.0.0.1", "5555");//TODO: make configurable
+
+	params.type		= XIO_SESSION_CLIENT;
+	params.ses_ops		= &ses_ops;
+	params.user_context	= &session_data;
+	params.uri		= url;
+
+	session = xio_session_create(&params);
+
+	cparams.session			= session;
+	cparams.ctx			= session_data.ctx;
+	cparams.conn_user_context	= &session_data;
+
+	/* connect the session  */
+	session_data.conn = xio_connect(&cparams);
+
+	/* create "hello world" message */
+	req = session_data.req_ring;
+	for (i = 0; i < g_queue_depth; i++) {
+		/* header */
+		req->out.header.iov_base =
+			strdup("hello world header request");
+		req->out.header.iov_len =
+			strlen((const char *)
+				req->out.header.iov_base) + 1;
+		/* iovec[0]*/
+		req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
+		req->in.data_iov.max_nents = XIO_IOVLEN;
+
+		req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+		req->out.data_iov.max_nents = XIO_IOVLEN;
+
+		req->out.data_iov.sglist[0].iov_base =
+			strdup("hello world data request");
+
+		req->out.data_iov.sglist[0].iov_len =
+			strlen((const char *)
+			  req->out.data_iov.sglist[0].iov_base)
+			   + 1;
+
+		req->out.data_iov.nents = 1;
+		req++;
+	}
+	/* send first message */
+	req = session_data.req_ring;
+	for (i = 0; i < g_queue_depth; i++) {
+		xio_send_request(session_data.conn, req);
+		session_data.nsent++;
+		req++;
+	}
+
+	/* event dispatcher is now running */
+	xio_context_run_loop(session_data.ctx, XIO_INFINITE);
+
+	/* normal exit phase */
+	fprintf(stdout, "exit signaled\n");
+
+	/* free the message */
+	req = session_data.req_ring;
+	for (i = 0; i < g_queue_depth; i++) {
+		free(req->out.header.iov_base);
+		free(req->out.data_iov.sglist[0].iov_base);
+		req++;
+	}
+
+	/* free the context */
+	xio_context_destroy(session_data.ctx);
+
+	xio_shutdown();
+
+	printf("good bye\n");
+	return 0;
 }

@@ -5558,6 +5558,8 @@ int main (int argc, char **argv) {
     {
     	printf("Backup IPs=[%s]\n", settings.failover_manager_key);
     	BackupServerRDMA();
+    	sleep(2);
+    	BackupClientRDMA();
     }
     /*
     if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
