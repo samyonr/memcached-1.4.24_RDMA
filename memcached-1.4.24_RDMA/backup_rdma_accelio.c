@@ -107,6 +107,7 @@ struct session_data {
 	uint64_t		nrecv;
 	uint64_t		pad;
 	struct xio_msg		req_ring[QUEUE_DEPTH];
+	struct xio_msg		single_req;
 };
 
 /*---------------------------------------------------------------------------*/
@@ -219,7 +220,6 @@ int rdma_load_file_to_memory(const char *filename, char **result)
 /*---------------------------------------------------------------------------*/
 static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 {
-	//struct xio_msg	*msg = &sd->rsp_ring[sd->ring_cnt++];
 	struct xio_msg *msg = &sd->single_rsp;
 	long size;
 	//char *content;
@@ -255,10 +255,7 @@ static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 			msg->out.data_iov.sglist[0].iov_base) + 1;
 	msg->out.data_iov.nents = 1;
 	//free(content);
-/*
-	if (sd->ring_cnt == QUEUE_DEPTH)
-		sd->ring_cnt = 0;
-*/
+
 	return msg;
 }
 
@@ -427,33 +424,30 @@ void *RunBackupServerRDMA(void *arg)
 	struct server_data	server_data;
 	char			url[256];
 	struct	xio_msg		*rsp;
-	int			i;
 
 	/* initialize library */
 	xio_init();
 
 	/* create "hello world" message */
 	memset(&server_data, 0, sizeof(server_data));
-	rsp = server_data.rsp_ring;
-	for (i = 0; i < QUEUE_DEPTH; i++) {
-		rsp->out.header.iov_base =
-			strdup("hello world header response");
-		rsp->out.header.iov_len =
-			strlen((const char *)
-				rsp->out.header.iov_base) + 1;
 
-		rsp->out.sgl_type	   = XIO_SGL_TYPE_IOV;
-		rsp->out.data_iov.max_nents = XIO_IOVLEN;
+	rsp = &server_data.single_rsp;
+	rsp->out.header.iov_base =
+		strdup("hello world header response");
+	rsp->out.header.iov_len =
+		strlen((const char *)
+			rsp->out.header.iov_base) + 1;
 
-		rsp->out.data_iov.sglist[0].iov_base =
-			strdup("hello world data response");
+	rsp->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+	rsp->out.data_iov.max_nents = XIO_IOVLEN;
 
-		rsp->out.data_iov.sglist[0].iov_len =
-			strlen((const char *)
-			       rsp->out.data_iov.sglist[0].iov_base) + 1;
-		rsp->out.data_iov.nents = 1;
-		rsp++;
-	}
+	rsp->out.data_iov.sglist[0].iov_base =
+		strdup("hello world data response");
+
+	rsp->out.data_iov.sglist[0].iov_len =
+		strlen((const char *)
+		       rsp->out.data_iov.sglist[0].iov_base) + 1;
+	rsp->out.data_iov.nents = 1;
 
 	/* create thread context for the client */
 	server_data.ctx	= xio_context_create(NULL, 0, -1);
@@ -476,12 +470,9 @@ void *RunBackupServerRDMA(void *arg)
 	}
 
 	/* free the message */
-	rsp = server_data.rsp_ring;
-	for (i = 0; i < QUEUE_DEPTH; i++) {
-		free(rsp->out.header.iov_base);
-		free(rsp->out.data_iov.sglist[0].iov_base);
-		rsp++;
-	}
+
+	free(rsp->out.header.iov_base);
+	free(rsp->out.data_iov.sglist[0].iov_base);
 
 	/* free the context */
 	xio_context_destroy(server_data.ctx);
@@ -516,7 +507,7 @@ int connectToRDMAServer()
 	struct xio_session		*session;
 	char				url[256];
 	struct session_data		session_data;
-	int				i = 0, opt, optlen;
+	int opt, optlen;
 	struct xio_session_params	params;
 	struct xio_connection_params	cparams;
 	struct xio_msg			*req;
@@ -558,39 +549,30 @@ int connectToRDMAServer()
 	session_data.conn = xio_connect(&cparams);
 
 	/* create "hello world" message */
-	req = session_data.req_ring;
-	for (i = 0; i < g_queue_depth; i++) {
-		/* header */
-		req->out.header.iov_base =
-			strdup("hello world header request");
-		req->out.header.iov_len =
-			strlen((const char *)
-				req->out.header.iov_base) + 1;
-		/* iovec[0]*/
-		req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
-		req->in.data_iov.max_nents = XIO_IOVLEN;
+	req = &session_data.single_req;
+	req->out.header.iov_base =
+		strdup("hello world header request");
+	req->out.header.iov_len =
+		strlen((const char *)
+			req->out.header.iov_base) + 1;
+	req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
+	req->in.data_iov.max_nents = XIO_IOVLEN;
 
-		req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
-		req->out.data_iov.max_nents = XIO_IOVLEN;
+	req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+	req->out.data_iov.max_nents = XIO_IOVLEN;
 
-		req->out.data_iov.sglist[0].iov_base =
-			strdup("hello world data request");
+	req->out.data_iov.sglist[0].iov_base =
+		strdup("hello world data request");
 
-		req->out.data_iov.sglist[0].iov_len =
-			strlen((const char *)
-			  req->out.data_iov.sglist[0].iov_base)
-			   + 1;
+	req->out.data_iov.sglist[0].iov_len =
+		strlen((const char *)
+		  req->out.data_iov.sglist[0].iov_base)
+		   + 1;
 
-		req->out.data_iov.nents = 1;
-		req++;
-	}
-	/* send first message */
-	req = session_data.req_ring;
-	for (i = 0; i < g_queue_depth; i++) {
-		xio_send_request(session_data.conn, req);
-		session_data.nsent++;
-		req++;
-	}
+	req->out.data_iov.nents = 1;
+
+	xio_send_request(session_data.conn, req);
+	session_data.nsent++;
 
 	/* event dispatcher is now running */
 	xio_context_run_loop(session_data.ctx, XIO_INFINITE);
@@ -599,12 +581,8 @@ int connectToRDMAServer()
 	fprintf(stdout, "exit signaled\n");
 
 	/* free the message */
-	req = session_data.req_ring;
-	for (i = 0; i < g_queue_depth; i++) {
-		free(req->out.header.iov_base);
-		free(req->out.data_iov.sglist[0].iov_base);
-		req++;
-	}
+	free(req->out.header.iov_base);
+	free(req->out.data_iov.sglist[0].iov_base);
 
 	/* free the context */
 	xio_context_destroy(session_data.ctx);
