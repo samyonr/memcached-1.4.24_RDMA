@@ -24,8 +24,8 @@ memcached_SOURCES = memcached.c memcached.h \
 		    		sharedmalloc.c sharedmalloc.h \
 		    		backup.c backup.h \
                     trace.h cache.h sasl_defs.h \
-                    backup_rdma_accelio.c \ 
-                    backup_rdma_accelio.h
+                    backup_rdma_accelio.c backup_rdma_accelio.h \
+                    queue.c queue.h
 
 if BUILD_CACHE
 memcached_SOURCES += cache.c

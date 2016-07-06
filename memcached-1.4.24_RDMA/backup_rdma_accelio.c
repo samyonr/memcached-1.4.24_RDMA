@@ -45,13 +45,15 @@
 #include <inttypes.h>
 #include <errno.h>
 #include <pthread.h>
-
+#include "queue.h"
 #include "backup_rdma_accelio.h"
 #include "libxio.h"
 
+void create_basic_request(struct xio_msg *req);
+void create_queue_data_request(struct xio_msg *req, int value);
 void *RunBackupServerRDMA(void *arg);
 int rdma_load_file_to_memory(const char *filename, char **result);
-int connectToRDMAServer(void);
+void *RunBackupClientRDMA(void *arg);
 static int on_session_event_client(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context);
@@ -75,10 +77,13 @@ static int on_request_server(struct xio_session *session,
 
 #define MAX_RDMA_BACKUPS	3
 
+
 static pthread_t g_serverThread;
+static pthread_t g_clientThread;
 int test_disconnect;
 int g_backups_RDMA_count = 0;
 int g_queue_depth;
+int g_server_connected = 0;
 
 /* server private data */
 struct server_data {
@@ -109,6 +114,7 @@ struct session_data {
 	struct xio_msg		req_ring[QUEUE_DEPTH];
 	struct xio_msg		single_req;
 };
+
 
 /*---------------------------------------------------------------------------*/
 /* on_session_event							     */
@@ -141,17 +147,32 @@ static int on_session_event_client(struct xio_session *session,
 static void process_response_client(struct session_data *session_data,
 			     struct xio_msg *rsp)
 {
-	if (++session_data->cnt == PRINT_COUNTER) {
+	if (strcmp((char *)rsp->in.header.iov_base,"beacon response header") == 0)
+	{
+		if (++session_data->cnt == PRINT_COUNTER) {
+			struct xio_iovec_ex	*isglist = vmsg_sglist(&rsp->in);
+			int			inents = vmsg_sglist_nents(&rsp->in);
+
+			printf("message: [%llu] - %s\n",
+				   (unsigned long long)(rsp->request->sn + 1),
+				   (char *)rsp->in.header.iov_base);
+			printf("message: [%llu] - %s\n",
+				   (unsigned long long)(rsp->request->sn + 1),
+				   (char *)(inents > 0 ? isglist[0].iov_base : NULL));
+			session_data->cnt = 0;
+		}
+	}
+	else if (strcmp((char *)rsp->in.header.iov_base,"test header") == 0)
+	{
 		struct xio_iovec_ex	*isglist = vmsg_sglist(&rsp->in);
 		int			inents = vmsg_sglist_nents(&rsp->in);
 
 		printf("message: [%llu] - %s\n",
-		       (unsigned long long)(rsp->request->sn + 1),
-		       (char *)rsp->in.header.iov_base);
+			   (unsigned long long)(rsp->request->sn + 1),
+			   (char *)rsp->in.header.iov_base);
 		printf("message: [%llu] - %s\n",
-		       (unsigned long long)(rsp->request->sn + 1),
-		       (char *)(inents > 0 ? isglist[0].iov_base : NULL));
-		session_data->cnt = 0;
+			   (unsigned long long)(rsp->request->sn + 1),
+			   (char *)(inents > 0 ? isglist[0].iov_base : NULL));
 	}
 }
 
@@ -163,8 +184,11 @@ static int on_response_client(struct xio_session *session,
 	struct session_data *session_data = (struct session_data *)
 						cb_user_context;
 	struct xio_msg	    *req = rsp;
+	int queue_val;
+
 
 	session_data->nrecv++;
+
 	/* process the incoming message */
 	process_response_client(session_data, rsp);
 
@@ -179,6 +203,20 @@ static int on_response_client(struct xio_session *session,
 		if (session_data->nsent == DISCONNECT_NR)
 			return 0;
 	}
+
+	//check if there a message waiting in the queue
+	if (!queue_empty())
+	{
+		queue_val = queue_frontelement();
+		printf("Got something in the queue! value = %d\n",queue_val);
+		queue_deq();
+		create_queue_data_request(req, queue_val);
+	}
+	else
+	{
+		create_basic_request(req);
+	}
+
 	req->in.header.iov_base	  = NULL;
 	req->in.header.iov_len	  = 0;
 	vmsg_sglist_set_nents(&req->in, 0);
@@ -229,7 +267,7 @@ static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 
 
 	msg->out.header.iov_base =
-		strdup("send slabs_lists_key1 header");
+		strdup("beacon response header");
 	msg->out.header.iov_len =
 		strlen((const char *)
 			msg->out.header.iov_base) + 1;
@@ -248,7 +286,7 @@ static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 
 
 	msg->out.data_iov.sglist[0].iov_base =
-				strdup("send slabs_lists_key1 body");
+				strdup("beacon response body");
 
 	msg->out.data_iov.sglist[0].iov_len =
 		strlen((const char *)
@@ -271,12 +309,47 @@ static void process_request_server(struct server_data *server_data,
 	int			len, i;
 	char			tmp;
 
-	/* note all data is packed together so in order to print each
-	 * part on its own NULL character is temporarily stuffed
-	 * before the print and the original character is restored after
-	 * the printf
-	 */
-	if (++server_data->cnt == PRINT_COUNTER) {
+	if (strcmp((char *)req->in.header.iov_base,"beacon request header") == 0)
+	{
+		/* note all data is packed together so in order to print each
+		 * part on its own NULL character is temporarily stuffed
+		 * before the print and the original character is restored after
+		 * the printf
+		 */
+		if (++server_data->cnt == PRINT_COUNTER) {
+			str = (char *)req->in.header.iov_base;
+			len = req->in.header.iov_len;
+			if (str) {
+				if (((unsigned)len) > 64)
+					len = 64;
+				tmp = str[len];
+				str[len] = '\0';
+				printf("message header : [%llu] - %s\n",
+					   (unsigned long long)(req->sn + 1), str);
+				str[len] = tmp;
+			}
+			for (i = 0; i < nents; i++) {
+				str = (char *)sglist[i].iov_base;
+				len = sglist[i].iov_len;
+				if (str) {
+					if (((unsigned)len) > 64)
+						len = 64;
+					tmp = str[len];
+					str[len] = '\0';
+					printf("message data: [%llu][%d][%d] - %s\n",
+						   (unsigned long long)(req->sn + 1),
+						   i, len, str);
+					str[len] = tmp;
+				}
+			}
+			server_data->cnt = 0;
+		}
+		req->in.header.iov_base	  = NULL;
+		req->in.header.iov_len	  = 0;
+		vmsg_sglist_set_nents(&req->in, 0);
+	}
+	else
+	{
 		str = (char *)req->in.header.iov_base;
 		len = req->in.header.iov_len;
 		if (str) {
@@ -285,10 +358,12 @@ static void process_request_server(struct server_data *server_data,
 			tmp = str[len];
 			str[len] = '\0';
 			printf("message header : [%llu] - %s\n",
-			       (unsigned long long)(req->sn + 1), str);
+				   (unsigned long long)(req->sn + 1), str);
 			str[len] = tmp;
 		}
 		for (i = 0; i < nents; i++) {
+			printf("message data : %d\n", *(int *)sglist[i].iov_base);
+			/*
 			str = (char *)sglist[i].iov_base;
 			len = sglist[i].iov_len;
 			if (str) {
@@ -297,16 +372,16 @@ static void process_request_server(struct server_data *server_data,
 				tmp = str[len];
 				str[len] = '\0';
 				printf("message data: [%llu][%d][%d] - %s\n",
-				       (unsigned long long)(req->sn + 1),
-				       i, len, str);
+					   (unsigned long long)(req->sn + 1),
+					   i, len, str);
 				str[len] = tmp;
-			}
+			}*/
 		}
 		server_data->cnt = 0;
+		req->in.header.iov_base	  = NULL;
+		req->in.header.iov_len	  = 0;
+		vmsg_sglist_set_nents(&req->in, 0);
 	}
-	req->in.header.iov_base	  = NULL;
-	req->in.header.iov_len	  = 0;
-	vmsg_sglist_set_nents(&req->in, 0);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -402,6 +477,63 @@ static struct xio_session_ops  server_ops __attribute__ ((unused)) = {
 	.on_msg_error			=  NULL
 };
 
+void create_basic_request(struct xio_msg *req)
+{
+	req->out.header.iov_base =
+		strdup("beacon request header");
+	req->out.header.iov_len =
+		strlen((const char *)
+			req->out.header.iov_base) + 1;
+	req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
+	req->in.data_iov.max_nents = XIO_IOVLEN;
+
+	req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+	req->out.data_iov.max_nents = XIO_IOVLEN;
+
+	req->out.data_iov.sglist[0].iov_base =
+		strdup("beacon request body");
+
+	req->out.data_iov.sglist[0].iov_len =
+		strlen((const char *)
+		  req->out.data_iov.sglist[0].iov_base)
+		   + 1;
+
+	req->out.data_iov.nents = 1;
+}
+
+void create_queue_data_request(struct xio_msg *req, int value)
+{
+	//int length = snprintf(NULL, 0, "queue data request body, value=%d", value);
+	void * p;
+
+
+	req->out.header.iov_base =
+		strdup("queue data request header");
+	req->out.header.iov_len =
+		strlen((const char *)
+			req->out.header.iov_base) + 1;
+	req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
+	req->in.data_iov.max_nents = XIO_IOVLEN;
+
+	req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
+	req->out.data_iov.max_nents = XIO_IOVLEN;
+
+	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(int));
+	p = req->out.data_iov.sglist[0].iov_base;
+	((int *)p)[0] = value;
+	req->out.data_iov.sglist[0].iov_len = sizeof(int);
+	//req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * (length + 1));
+	//snprintf(req->out.data_iov.sglist[0].iov_base, length+1, "queue data request body, value=%d", value);
+
+	/*req->out.data_iov.sglist[0].iov_len =
+		strlen((const char *)
+		  req->out.data_iov.sglist[0].iov_base)
+		   + 1;
+	*/
+
+	req->out.data_iov.nents = 1;
+}
+
 /*---------------------------------------------------------------------------*/
 /* main									     */
 /*---------------------------------------------------------------------------*/
@@ -489,20 +621,19 @@ int BackupClientRDMA()
 		printf("Maximal number of backups reached\n");
 		return -1;
 	}
-
-    if (connectToRDMAServer() == 0)
+	int rv;
+    //Create backup server thread
+    rv = pthread_create(&g_clientThread, NULL, RunBackupClientRDMA, NULL);
+    if(rv < 0)
     {
-    	g_backups_RDMA_count++;
-        return 0;
-    }
-    else
-    {
-    	printf("Error creating client connection\n");
+    	printf("Error creating backup client thread\n");
     	return -1;
     }
+    g_backups_RDMA_count++;
+    return 0;
 }
 
-int connectToRDMAServer()
+void *RunBackupClientRDMA(void *arg)
 {
 	struct xio_session		*session;
 	char				url[256];
@@ -550,27 +681,9 @@ int connectToRDMAServer()
 
 	/* create "hello world" message */
 	req = &session_data.single_req;
-	req->out.header.iov_base =
-		strdup("hello world header request");
-	req->out.header.iov_len =
-		strlen((const char *)
-			req->out.header.iov_base) + 1;
-	req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
-	req->in.data_iov.max_nents = XIO_IOVLEN;
+	create_basic_request(req);
 
-	req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
-	req->out.data_iov.max_nents = XIO_IOVLEN;
-
-	req->out.data_iov.sglist[0].iov_base =
-		strdup("hello world data request");
-
-	req->out.data_iov.sglist[0].iov_len =
-		strlen((const char *)
-		  req->out.data_iov.sglist[0].iov_base)
-		   + 1;
-
-	req->out.data_iov.nents = 1;
-
+	g_server_connected = 1;
 	xio_send_request(session_data.conn, req);
 	session_data.nsent++;
 

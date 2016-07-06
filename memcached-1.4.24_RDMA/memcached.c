@@ -26,6 +26,7 @@
 #include <sys/uio.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include "queue.h"
 
 /* some POSIX systems need the following definition
  * to get mlockall flags out of sys/mman.h.  */
@@ -970,7 +971,9 @@ static void complete_nread_ascii(conn *c) {
               /* notify the FailoverManager about item store */
               /* TODO: check that the item is fully stored - key and value */
               fprintf(stderr, "writing to backup client\n");
-              sendBackupToClients();
+              queue_enq(1);
+              //sendBackupToClients();
+              //sendBackupToClientsRDMA();
               fprintf(stderr, "writing to backup client - COMPLETED\n");
           }
           break;
@@ -5557,6 +5560,8 @@ int main (int argc, char **argv) {
     if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
     {
     	printf("Backup IPs=[%s]\n", settings.failover_manager_key);
+    	queue_create();
+
     	BackupServerRDMA();
     	sleep(2);
     	BackupClientRDMA();

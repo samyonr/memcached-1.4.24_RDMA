@@ -118,8 +118,8 @@ am__memcached_SOURCES_DIST = memcached.c memcached.h hash.c hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
 	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
-	backup_rdma_accelio.c backup_rdma_accelio.h cache.c \
-	solaris_priv.c sasl_defs.c
+	backup_rdma_accelio.c backup_rdma_accelio.h queue.c queue.h \
+	cache.c solaris_priv.c sasl_defs.c
 am__objects_1 = memcached-cache.$(OBJEXT)
 #am__objects_2 =  \
 #	memcached-solaris_priv.$(OBJEXT)
@@ -131,16 +131,17 @@ am_memcached_OBJECTS = memcached-memcached.$(OBJEXT) \
 	memcached-thread.$(OBJEXT) memcached-daemon.$(OBJEXT) \
 	memcached-stats.$(OBJEXT) memcached-util.$(OBJEXT) \
 	memcached-sharedmalloc.$(OBJEXT) memcached-backup.$(OBJEXT) \
-	memcached-backup_rdma_accelio.$(OBJEXT) $(am__objects_1) \
-	$(am__objects_2) $(am__objects_3)
+	memcached-backup_rdma_accelio.$(OBJEXT) \
+	memcached-queue.$(OBJEXT) $(am__objects_1) $(am__objects_2) \
+	$(am__objects_3)
 memcached_OBJECTS = $(am_memcached_OBJECTS)
 am__memcached_debug_SOURCES_DIST = memcached.c memcached.h hash.c \
 	hash.h jenkins_hash.c jenkins_hash.h murmur3_hash.c \
 	murmur3_hash.h slabs.c slabs.h items.c items.h assoc.c assoc.h \
 	thread.c daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
 	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
-	backup_rdma_accelio.c backup_rdma_accelio.h cache.c \
-	solaris_priv.c sasl_defs.c
+	backup_rdma_accelio.c backup_rdma_accelio.h queue.c queue.h \
+	cache.c solaris_priv.c sasl_defs.c
 am__objects_4 = memcached_debug-cache.$(OBJEXT)
 #am__objects_5 = memcached_debug-solaris_priv.$(OBJEXT)
 #am__objects_6 = memcached_debug-sasl_defs.$(OBJEXT)
@@ -156,7 +157,8 @@ am__objects_7 = memcached_debug-memcached.$(OBJEXT) \
 	memcached_debug-stats.$(OBJEXT) memcached_debug-util.$(OBJEXT) \
 	memcached_debug-sharedmalloc.$(OBJEXT) \
 	memcached_debug-backup.$(OBJEXT) \
-	memcached_debug-backup_rdma_accelio.$(OBJEXT) $(am__objects_4) \
+	memcached_debug-backup_rdma_accelio.$(OBJEXT) \
+	memcached_debug-queue.$(OBJEXT) $(am__objects_4) \
 	$(am__objects_5) $(am__objects_6)
 am_memcached_debug_OBJECTS = $(am__objects_7)
 memcached_debug_OBJECTS = $(am_memcached_debug_OBJECTS)
@@ -440,8 +442,8 @@ memcached_SOURCES = memcached.c memcached.h hash.c hash.h \
 	slabs.c slabs.h items.c items.h assoc.c assoc.h thread.c \
 	daemon.c stats.c stats.h util.c util.h sharedmalloc.c \
 	sharedmalloc.h backup.c backup.h trace.h cache.h sasl_defs.h \
-	backup_rdma_accelio.c backup_rdma_accelio.h $(am__append_1) \
-	$(am__append_3) $(am__append_4)
+	backup_rdma_accelio.c backup_rdma_accelio.h queue.c queue.h \
+	$(am__append_1) $(am__append_3) $(am__append_4)
 memcached_debug_SOURCES = $(memcached_SOURCES)
 memcached_CPPFLAGS = -DNDEBUG
 memcached_debug_LDADD = -lgcov $(am__append_9)
@@ -591,6 +593,7 @@ include ./$(DEPDIR)/memcached-items.Po
 include ./$(DEPDIR)/memcached-jenkins_hash.Po
 include ./$(DEPDIR)/memcached-memcached.Po
 include ./$(DEPDIR)/memcached-murmur3_hash.Po
+include ./$(DEPDIR)/memcached-queue.Po
 include ./$(DEPDIR)/memcached-sasl_defs.Po
 include ./$(DEPDIR)/memcached-sharedmalloc.Po
 include ./$(DEPDIR)/memcached-slabs.Po
@@ -608,6 +611,7 @@ include ./$(DEPDIR)/memcached_debug-items.Po
 include ./$(DEPDIR)/memcached_debug-jenkins_hash.Po
 include ./$(DEPDIR)/memcached_debug-memcached.Po
 include ./$(DEPDIR)/memcached_debug-murmur3_hash.Po
+include ./$(DEPDIR)/memcached_debug-queue.Po
 include ./$(DEPDIR)/memcached_debug-sasl_defs.Po
 include ./$(DEPDIR)/memcached_debug-sharedmalloc.Po
 include ./$(DEPDIR)/memcached_debug-slabs.Po
@@ -829,6 +833,20 @@ memcached-backup_rdma_accelio.obj: backup_rdma_accelio.c
 #	$(AM_V_CC)source='backup_rdma_accelio.c' object='memcached-backup_rdma_accelio.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-backup_rdma_accelio.obj `if test -f 'backup_rdma_accelio.c'; then $(CYGPATH_W) 'backup_rdma_accelio.c'; else $(CYGPATH_W) '$(srcdir)/backup_rdma_accelio.c'; fi`
+
+memcached-queue.o: queue.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-queue.o -MD -MP -MF $(DEPDIR)/memcached-queue.Tpo -c -o memcached-queue.o `test -f 'queue.c' || echo '$(srcdir)/'`queue.c
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-queue.Tpo $(DEPDIR)/memcached-queue.Po
+#	$(AM_V_CC)source='queue.c' object='memcached-queue.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-queue.o `test -f 'queue.c' || echo '$(srcdir)/'`queue.c
+
+memcached-queue.obj: queue.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-queue.obj -MD -MP -MF $(DEPDIR)/memcached-queue.Tpo -c -o memcached-queue.obj `if test -f 'queue.c'; then $(CYGPATH_W) 'queue.c'; else $(CYGPATH_W) '$(srcdir)/queue.c'; fi`
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached-queue.Tpo $(DEPDIR)/memcached-queue.Po
+#	$(AM_V_CC)source='queue.c' object='memcached-queue.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o memcached-queue.obj `if test -f 'queue.c'; then $(CYGPATH_W) 'queue.c'; else $(CYGPATH_W) '$(srcdir)/queue.c'; fi`
 
 memcached-cache.o: cache.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT memcached-cache.o -MD -MP -MF $(DEPDIR)/memcached-cache.Tpo -c -o memcached-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c
@@ -1067,6 +1085,20 @@ memcached_debug-backup_rdma_accelio.obj: backup_rdma_accelio.c
 #	$(AM_V_CC)source='backup_rdma_accelio.c' object='memcached_debug-backup_rdma_accelio.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-backup_rdma_accelio.obj `if test -f 'backup_rdma_accelio.c'; then $(CYGPATH_W) 'backup_rdma_accelio.c'; else $(CYGPATH_W) '$(srcdir)/backup_rdma_accelio.c'; fi`
+
+memcached_debug-queue.o: queue.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-queue.o -MD -MP -MF $(DEPDIR)/memcached_debug-queue.Tpo -c -o memcached_debug-queue.o `test -f 'queue.c' || echo '$(srcdir)/'`queue.c
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-queue.Tpo $(DEPDIR)/memcached_debug-queue.Po
+#	$(AM_V_CC)source='queue.c' object='memcached_debug-queue.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-queue.o `test -f 'queue.c' || echo '$(srcdir)/'`queue.c
+
+memcached_debug-queue.obj: queue.c
+	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-queue.obj -MD -MP -MF $(DEPDIR)/memcached_debug-queue.Tpo -c -o memcached_debug-queue.obj `if test -f 'queue.c'; then $(CYGPATH_W) 'queue.c'; else $(CYGPATH_W) '$(srcdir)/queue.c'; fi`
+	$(AM_V_at)$(am__mv) $(DEPDIR)/memcached_debug-queue.Tpo $(DEPDIR)/memcached_debug-queue.Po
+#	$(AM_V_CC)source='queue.c' object='memcached_debug-queue.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(AM_V_CC_no)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -c -o memcached_debug-queue.obj `if test -f 'queue.c'; then $(CYGPATH_W) 'queue.c'; else $(CYGPATH_W) '$(srcdir)/queue.c'; fi`
 
 memcached_debug-cache.o: cache.c
 	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memcached_debug_CFLAGS) $(CFLAGS) -MT memcached_debug-cache.o -MD -MP -MF $(DEPDIR)/memcached_debug-cache.Tpo -c -o memcached_debug-cache.o `test -f 'cache.c' || echo '$(srcdir)/'`cache.c
