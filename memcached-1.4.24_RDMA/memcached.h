@@ -345,13 +345,13 @@ struct settings {
     bool shared_malloc_assoc; /* shared malloc for assoc.c on/off */
     char* shared_malloc_assoc_key; /* shared malloc for assoc.c key */
     bool failover_manager; /* failover manager on/off */
-    char* failover_manager_key; /* failover manager key for using shared malloc */
+    char* failover_manager_ips; /* failover manager key for using shared malloc */
+    char* failover_comm_type; /* failover communication type for back. TCP or RDMA */
 };
 
 extern struct stats stats;
 extern time_t process_started;
 extern struct settings settings;
-extern void *failoverManagerMsg;
 
 #define ITEM_LINKED 1
 #define ITEM_CAS 2
@@ -561,7 +561,6 @@ extern int daemonize(int nochdir, int noclose);
 #include "trace.h"
 #include "hash.h"
 #include "util.h"
-/* #include "sharedmalloc.h" */
 
 /*
  * Functions such as the libevent-related calls that need to do cross-thread
