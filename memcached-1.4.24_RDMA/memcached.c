@@ -5600,9 +5600,9 @@ int main (int argc, char **argv) {
 		}
 		else //RDMA
 		{
-	    		BackupServerRDMA();
+	    		BackupServerRDMA(*(g_backup_addr + 0)); //TODO: create client and server seperate arguments
 	    		sleep(2); //TODO: remove it, only for testing
-	    		BackupClientRDMA();
+	    		BackupClientRDMA(*(g_backup_addr + 0)); //TODO: use for-loop
 		}
 	}
     }
