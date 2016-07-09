@@ -66,7 +66,9 @@ It’s worth to mention, that when transmitting data via RDMA, in order to keep 
 
 ### Configurations
 
+```sh
 -t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o failover_manager="127.0.0.1 10.0.1.2" -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1
+```
 
 More will be added soon. Including description.
 
@@ -79,25 +81,35 @@ TBA
 Activate telnet on one of the machines or on a third machine: telnet 10.0.0.1 11211.
 
 Write:
+```sh
 set greeting 1 0 11
 Hello world
+```
 
 You will receive the following answer:
+```sh
 STORED
+```
 
 Then close the memcached on machine 10.0.0.1, and activate telnet again: telnet 10.0.0.2 11211.
 
 Now write:
+```sh
 get greeting
+```
 
 You will receive the following answer:
+```sh
 VALUE greeting 1 11
 Hello world
 END
+```
 
 Which indicates that the Memcached on machine 10.0.0.2 receive the stored information on machine 10.0.0.1.
 
 ## Contributing
 
 This project is a PoC, and as a next step I will work on more sophisticated and fast backup implementations. The focus will be on working with native RDMA verbs API, and trying other alternative approaches to embedding code into Memcached's source code - for example using CRIU (https://criu.org/). Take this code and try everything you want for yourself, or contact me for more information. You can contact with me via Linkedin, or in the following email address (letters changed protection against bots. Switch every symbol to the corresponding letter. @ = a [except before "mail"], 0 = o, $ = s):
+```sh
 s @ m y 0 n . r i $ t 0 v @mail . huji . ac . il 
+```
