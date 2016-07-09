@@ -107,10 +107,10 @@ static void conn_free(conn *c);
 /** exported globals **/
 struct stats stats;
 struct settings settings;
-void *failoverManagerMsg;
 time_t process_started;     /* when the process was started */
 conn **conns;
 char** g_backup_addr;
+char** g_backup_src_addr;
 
 struct slab_rebalance slab_rebal;
 volatile int slab_rebalance_signal;
@@ -261,8 +261,10 @@ static void settings_init(void) {
     settings.shared_malloc_slabs_lists_key = NULL;
     settings.shared_malloc_assoc = false;
     settings.shared_malloc_assoc_key = NULL;
-    settings.failover_manager = false;
-    settings.failover_manager_ips = NULL;
+    settings.failover_dest = false;
+    settings.failover_dest_ips = NULL;
+    settings.failover_src = false;
+    settings.failover_src_ips = NULL;
     settings.failover_comm_type = NULL;
 }
 
@@ -957,7 +959,8 @@ static void complete_nread_ascii(conn *c) {
           if (settings.shared_malloc_slabs && 
           	settings.shared_malloc_assoc && 
           	settings.shared_malloc_slabs_lists && 
-          	settings.failover_manager)
+          	settings.failover_dest &&
+          	settings.failover_src)
           {
               fprintf(stderr, "writing to backup client\n");
               queue_enq(1);
@@ -2716,8 +2719,10 @@ static void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("shared_malloc_slabs_lists_key", "%s", settings.shared_malloc_slabs_lists_key ? settings.shared_malloc_slabs_lists_key : "NULL");
     APPEND_STAT("shared_malloc_assoc", "%s", settings.shared_malloc_assoc ? "yes" : "no");
     APPEND_STAT("shared_malloc_assoc_key", "%s", settings.shared_malloc_assoc_key ? settings.shared_malloc_assoc_key : "NULL");
-    APPEND_STAT("failover_manager", "%s", settings.failover_manager ? "yes" : "no");
-    APPEND_STAT("failover_manager_ips", "%s", settings.failover_manager_ips ? settings.failover_manager_ips : "NULL");
+    APPEND_STAT("failover_dest", "%s", settings.failover_dest ? "yes" : "no");
+    APPEND_STAT("failover_dest_ips", "%s", settings.failover_dest_ips ? settings.failover_dest_ips : "NULL");
+    APPEND_STAT("failover_src", "%s", settings.failover_src ? "yes" : "no");
+    APPEND_STAT("failover_src_ips", "%s", settings.failover_src_ips ? settings.failover_src_ips : "NULL");
     APPEND_STAT("failover_comm_type", "%s", settings.failover_comm_type ? settings.failover_comm_type : "NULL");
 }
 
@@ -5116,7 +5121,8 @@ int main (int argc, char **argv) {
         SHARED_MALLOC_SLABS,
         SHARED_MALLOC_ASSOC,
         SHARED_MALLOC_SLABS_LISTS,
-        FAILOVER_MANAGER,
+        FAILOVER_DEST,
+        FAILOVER_SRC,
         FAILOVER_COMM_TYPE,
         SLAB_REASSIGN,
         SLAB_AUTOMOVE,
@@ -5136,7 +5142,8 @@ int main (int argc, char **argv) {
         [SHARED_MALLOC_SLABS] = "shared_malloc_slabs",
         [SHARED_MALLOC_SLABS_LISTS] = "shared_malloc_slabs_lists",
         [SHARED_MALLOC_ASSOC] = "shared_malloc_assoc",
-        [FAILOVER_MANAGER] = "failover_manager",
+        [FAILOVER_DEST] = "failover_dest",
+        [FAILOVER_SRC] = "failover_src",
         [FAILOVER_COMM_TYPE] = "failover_comm_type",
         [SLAB_REASSIGN] = "slab_reassign",
         [SLAB_AUTOMOVE] = "slab_automove",
@@ -5526,14 +5533,22 @@ int main (int argc, char **argv) {
                 settings.shared_malloc_assoc = true;
                 settings.shared_malloc_assoc_key = subopts_value;
                 break;
-            case FAILOVER_MANAGER:
+            case FAILOVER_DEST:
                 if (subopts_value == NULL) {
-                    fprintf(stderr, "Missing failover_manager argument\n");
+                    fprintf(stderr, "Missing failover_dest argument\n");
                     return 1;
                 }
-                settings.failover_manager = true;
-                settings.failover_manager_ips = subopts_value;
+                settings.failover_dest = true;
+                settings.failover_dest_ips = subopts_value;
                 break;
+            case FAILOVER_SRC:
+                  if (subopts_value == NULL) {
+                    fprintf(stderr, "Missing failover_src argument\n");
+                    return 1;
+                }
+                settings.failover_src = true;
+                settings.failover_src_ips = subopts_value;
+                break;          
             case FAILOVER_COMM_TYPE:
             	if (subopts_value == NULL) {
             	    fprintf(stderr, "Missing failover_comm_type argument\n");
@@ -5565,14 +5580,16 @@ int main (int argc, char **argv) {
     if (settings.shared_malloc_slabs && 
     	settings.shared_malloc_assoc && 
     	settings.shared_malloc_slabs_lists && 
-    	settings.failover_manager && 
+    	settings.failover_dest && 
+    	settings.failover_src &&
     	settings.failover_comm_type)
     {
-    	printf("Backup IPs=[%s]\n", settings.failover_manager_ips);
-    	g_backup_addr = str_split(settings.failover_manager_ips, ' ');
+    	printf("Backup IPs=[%s]\n", settings.failover_dest_ips);
+    	g_backup_addr = str_split(settings.failover_dest_ips, ' ');
+    	g_backup_src_addr = str_split(settings.failover_src_ips, ':');
     	queue_create();
 
-	if (g_backup_addr)
+	if (g_backup_addr && g_backup_src_addr)
 	{
 		if (strcmp(settings.failover_comm_type, "TCP" == 0))
 		{
@@ -5600,9 +5617,9 @@ int main (int argc, char **argv) {
 		}
 		else //RDMA
 		{
-	    		BackupServerRDMA(*(g_backup_addr + 0)); //TODO: create client and server seperate arguments
+	    		BackupServerRDMA(*(g_backup_src_addr + 0));
 	    		sleep(2); //TODO: remove it, only for testing
-	    		BackupClientRDMA(*(g_backup_addr + 0)); //TODO: use for-loop
+	    		BackupClientRDMA(*(g_backup_addr + 0)); //TODO: use for-loop, split by : first
 		}
 	}
     }
