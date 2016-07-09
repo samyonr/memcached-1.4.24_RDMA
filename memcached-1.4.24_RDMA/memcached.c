@@ -262,7 +262,8 @@ static void settings_init(void) {
     settings.shared_malloc_assoc = false;
     settings.shared_malloc_assoc_key = NULL;
     settings.failover_manager = false;
-    settings.failover_manager_key = NULL;
+    settings.failover_manager_ips = NULL;
+    settings.failover_comm_type = NULL;
 }
 
 /*
@@ -952,28 +953,14 @@ static void complete_nread_ascii(conn *c) {
       switch (ret) {
       case STORED:
           out_string(c, "STORED");
-          /*
-          if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
+
+          if (settings.shared_malloc_slabs && 
+          	settings.shared_malloc_assoc && 
+          	settings.shared_malloc_slabs_lists && 
+          	settings.failover_manager)
           {
-              // notify the FailoverManager about item store
-              // TODO: check that the item is fully stored - key and value
-              fprintf(stderr, "writing true to failoverManagerMsg\n");
-              if (failoverManagerMsg == NULL)
-              {
-                  fprintf(stderr, "failoverManagerMsg is null before set\n");
-              }
-              memset(failoverManagerMsg, 116 , 1); // 116 in ascii is 't' for 'true' TODO: update in a better way - by date or counter or something
-              fprintf(stderr, "writing true to failoverManagerMsg - COMPLETED\n");
-          }
-      	  */
-          if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
-          {
-              /* notify the FailoverManager about item store */
-              /* TODO: check that the item is fully stored - key and value */
               fprintf(stderr, "writing to backup client\n");
               queue_enq(1);
-              //sendBackupToClients();
-              //sendBackupToClientsRDMA();
               fprintf(stderr, "writing to backup client - COMPLETED\n");
           }
           break;
@@ -2730,7 +2717,8 @@ static void process_stat_settings(ADD_STAT add_stats, void *c) {
     APPEND_STAT("shared_malloc_assoc", "%s", settings.shared_malloc_assoc ? "yes" : "no");
     APPEND_STAT("shared_malloc_assoc_key", "%s", settings.shared_malloc_assoc_key ? settings.shared_malloc_assoc_key : "NULL");
     APPEND_STAT("failover_manager", "%s", settings.failover_manager ? "yes" : "no");
-    APPEND_STAT("failover_manager_key", "%s", settings.failover_manager_key ? settings.failover_manager_key : "NULL");
+    APPEND_STAT("failover_manager_ips", "%s", settings.failover_manager_ips ? settings.failover_manager_ips : "NULL");
+    APPEND_STAT("failover_comm_type", "%s", settings.failover_comm_type ? settings.failover_comm_type : "NULL");
 }
 
 static void conn_to_str(const conn *c, char *buf) {
@@ -5129,6 +5117,7 @@ int main (int argc, char **argv) {
         SHARED_MALLOC_ASSOC,
         SHARED_MALLOC_SLABS_LISTS,
         FAILOVER_MANAGER,
+        FAILOVER_COMM_TYPE,
         SLAB_REASSIGN,
         SLAB_AUTOMOVE,
         TAIL_REPAIR_TIME,
@@ -5148,6 +5137,7 @@ int main (int argc, char **argv) {
         [SHARED_MALLOC_SLABS_LISTS] = "shared_malloc_slabs_lists",
         [SHARED_MALLOC_ASSOC] = "shared_malloc_assoc",
         [FAILOVER_MANAGER] = "failover_manager",
+        [FAILOVER_COMM_TYPE] = "failover_comm_type",
         [SLAB_REASSIGN] = "slab_reassign",
         [SLAB_AUTOMOVE] = "slab_automove",
         [TAIL_REPAIR_TIME] = "tail_repair_time",
@@ -5516,7 +5506,7 @@ int main (int argc, char **argv) {
                 if (subopts_value == NULL) {
                     fprintf(stderr, "Missing shared_malloc_slabs argument\n");
                     return 1;
-                };
+                }
                 settings.shared_malloc_slabs = true;
                 settings.shared_malloc_slabs_key = subopts_value;
                 break;
@@ -5524,7 +5514,7 @@ int main (int argc, char **argv) {
                 if (subopts_value == NULL) {
                     fprintf(stderr, "Missing settings.shared_malloc_slabs_lists argument\n");
                     return 1;
-                };
+                }
                 settings.shared_malloc_slabs_lists = true;
                 settings.shared_malloc_slabs_lists_key = subopts_value;
                 break;
@@ -5532,7 +5522,7 @@ int main (int argc, char **argv) {
                 if (subopts_value == NULL) {
                     fprintf(stderr, "Missing shared_malloc_assoc argument\n");
                     return 1;
-                };
+                }
                 settings.shared_malloc_assoc = true;
                 settings.shared_malloc_assoc_key = subopts_value;
                 break;
@@ -5540,10 +5530,25 @@ int main (int argc, char **argv) {
                 if (subopts_value == NULL) {
                     fprintf(stderr, "Missing failover_manager argument\n");
                     return 1;
-                };
+                }
                 settings.failover_manager = true;
-                settings.failover_manager_key = subopts_value;
+                settings.failover_manager_ips = subopts_value;
                 break;
+            case FAILOVER_COMM_TYPE:
+            	if (subopts_value == NULL) {
+            	    fprintf(stderr, "Missing failover_comm_type argument\n");
+            	    return 1;
+            	}
+            	if (strcmp(subopts_value, "TCP") == 0 || strcmp(subopts_value, "RDMA") == 0)
+            	{
+            	    settings.failover_comm_type = subopts_value;
+            	}
+            	else
+            	{
+            	    fprintf(stderr, "failover_comm_type argument isnt TCP of RDMA")l
+            	    return 1;
+            	}
+            	break;
             default:
                 printf("Illegal suboption \"%s\"\n", subopts_value);
                 return 1;
@@ -5557,27 +5562,23 @@ int main (int argc, char **argv) {
         }
     }
 
-    if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
+    if (settings.shared_malloc_slabs && 
+    	settings.shared_malloc_assoc && 
+    	settings.shared_malloc_slabs_lists && 
+    	settings.failover_manager && 
+    	settings.failover_comm_type)
     {
-    	printf("Backup IPs=[%s]\n", settings.failover_manager_key);
+    	printf("Backup IPs=[%s]\n", settings.failover_manager_ips);
+    	g_backup_addr = str_split(settings.failover_manager_ips, ' ');
     	queue_create();
 
-    	BackupServerRDMA();
-    	sleep(2);
-    	BackupClientRDMA();
-    }
-    /*
-    if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.shared_malloc_slabs_lists && settings.failover_manager)
-    {
-    	BackupServer();
-    	sleep(2);
-		printf("Backup IPs=[%s]\n", settings.failover_manager_key);
-
-		g_backup_addr = str_split(settings.failover_manager_key, ' ');
-
-		if (g_backup_addr)
+	if (g_backup_addr)
+	{
+		if (strcmp(settings.failover_comm_type, "TCP" == 0))
 		{
-			int i;
+			BackupServer();
+	    		sleep(2);
+	    		int i;
 			for (i = 0; *(g_backup_addr + i); i++)
 			{
 				printf("IP=[%s]\n", *(g_backup_addr + i));
@@ -5593,27 +5594,17 @@ int main (int argc, char **argv) {
 				{
 					printf("failed to connect\n");
 				}
-
-				//free(*(g_backup_addr + i));
+				//TODO: free(*(g_backup_addr + i)); ? 
 			}
-			//free(g_backup_addr);
+			//TODO: free(g_backup_addr);
 		}
-        //BackupServer();
-    }
-    */
-
-    if (settings.shared_malloc_slabs && settings.shared_malloc_assoc && settings.failover_manager)
-    {
-        fprintf(stderr, "mapping failoverManagerMsg\n");
-        failoverManagerMsg = shared_malloc(0, 1, settings.failover_manager_key, HARD_LOCK);
-        if (failoverManagerMsg == NULL)
-        {
-            fprintf(stderr, "mapping failoverManagerMsg - FAILED\n");
-        }
-        else
-        {        
-            fprintf(stderr, "mapping failoverManagerMsg - COMPLETED\n");
-        }
+		else //RDMA
+		{
+	    		BackupServerRDMA();
+	    		sleep(2); //TODO: remove it, only for testing
+	    		BackupClientRDMA();
+		}
+	}
     }
 
     if (settings.lru_maintainer_thread && settings.hot_lru_pct + settings.warm_lru_pct > 80) {
