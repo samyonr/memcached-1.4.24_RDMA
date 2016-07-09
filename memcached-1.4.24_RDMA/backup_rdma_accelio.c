@@ -86,8 +86,8 @@ int g_queue_depth;
 int g_server_connected = 0;
 
 struct addr {
-	char		ip;
-	u_int64_t	port;
+	char		*ip;
+	char		*port;
 };
 
 /* server private data */
@@ -542,7 +542,7 @@ void create_queue_data_request(struct xio_msg *req, int value)
 /*---------------------------------------------------------------------------*/
 /* main									     */
 /*---------------------------------------------------------------------------*/
-int BackupServerRDMA(char *clientHostname, uint64_t port)
+int BackupServerRDMA(char *clientHostname, char *port)
 {
     int rv;
     struct addr	addr; //TODO: need to allocate?
@@ -624,7 +624,7 @@ void *RunBackupServerRDMA(void *arg)
 	exit(0);
 }
 
-int BackupClientRDMA(char *clientHostname, uint64_t port)
+int BackupClientRDMA(char *clientHostname, char *port)
 {
 	if (g_backups_RDMA_count >= MAX_RDMA_BACKUPS)
 	{
