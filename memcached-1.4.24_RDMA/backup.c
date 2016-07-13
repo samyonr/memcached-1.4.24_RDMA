@@ -23,8 +23,6 @@ void sigchld_handler(int s);
 void *connection_handler(void *socket_desc);
 void *RunBackupServer(void *arg);
 int connectToServer(char *clientHostname, char *clientPort, int *sockfd);
-int ae_load_file_to_memory(const char *filename, char **result);
-int ae_load_memory_to_file(const char *filename, const char *data, const int size);
 
 static pthread_t g_serverThread;
 static int g_backups_count = 0;

@@ -17,5 +17,7 @@ int BackupServer(void);
 int BackupClient(char *clientHostnamePortwithPort);
 char** str_split(char* a_str, const char a_delim);
 int receive(int sockfd, char *buf, int *numbytes);
+int ae_load_file_to_memory(const char *filename, char **result);
+int ae_load_memory_to_file(const char *filename, const char *data, const int size);
 
 #endif /* BACKUP_H_ */

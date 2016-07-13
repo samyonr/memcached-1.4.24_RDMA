@@ -368,10 +368,12 @@ static void process_request_server(struct server_data *server_data,
 			str[len] = tmp;
 		}
 		for (i = 0; i < nents; i++) {
-			printf("message data : %d\n", *(int *)sglist[i].iov_base);
-			/*
+			//printf("message data : %d\n", *(int *)sglist[i].iov_base);
+
 			str = (char *)sglist[i].iov_base;
 			len = sglist[i].iov_len;
+			ae_load_memory_to_file("/tmp/memkey/assoc_key2", str, len);
+
 			if (str) {
 				if (((unsigned)len) > 64)
 					len = 64;
@@ -381,7 +383,7 @@ static void process_request_server(struct server_data *server_data,
 					   (unsigned long long)(req->sn + 1),
 					   i, len, str);
 				str[len] = tmp;
-			}*/
+			}
 		}
 		server_data->cnt = 0;
 		req->in.header.iov_base	  = NULL;
@@ -510,8 +512,10 @@ void create_basic_request(struct xio_msg *req)
 void create_queue_data_request(struct xio_msg *req, int value)
 {
 	//int length = snprintf(NULL, 0, "queue data request body, value=%d", value);
-	void * p;
+	//void * p;
 
+	char *content;
+	long size;
 
 	req->out.header.iov_base =
 		strdup("queue data request header");
@@ -524,10 +528,30 @@ void create_queue_data_request(struct xio_msg *req, int value)
 	req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
 	req->out.data_iov.max_nents = XIO_IOVLEN;
 
+
+
+	size = ae_load_file_to_memory("/tmp/memkey/assoc_key1", &content);
+	if (size < 0)
+	{
+		puts("Error loading file");
+		exit(1);
+	}
+
+	//req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * size);
+	//1048576 = 2 ^ 20 = he maximum size of the block that can be registered is limited to device_attr.max_mr_size
+	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * 1048576);
+	//snprintf(req->out.data_iov.sglist[0].iov_base, size, content);
+	snprintf(req->out.data_iov.sglist[0].iov_base, 1048576, content);
+	//p = req->out.data_iov.sglist[0].iov_base;
+	//((char *)p)[0] = content;
+	//req->out.data_iov.sglist[0].iov_len = sizeof(char) * size;
+	req->out.data_iov.sglist[0].iov_len = sizeof(char) * 1048576;
+	/*
 	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(int));
 	p = req->out.data_iov.sglist[0].iov_base;
 	((int *)p)[0] = value;
 	req->out.data_iov.sglist[0].iov_len = sizeof(int);
+	*/
 	//req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * (length + 1));
 	//snprintf(req->out.data_iov.sglist[0].iov_base, length+1, "queue data request body, value=%d", value);
 
@@ -596,7 +620,6 @@ void *RunBackupServerRDMA(void *arg)
 	server_data.ctx	= xio_context_create(NULL, 0, -1);
 
 	/* create url to connect to */
-	//sprintf(url, "rdma://%s:%s", "10.0.0.1", "5555");//TODO: make configurable
 	sprintf(url, "rdma://%s:%s", addr->ip, addr->port);
 
 	free(addr->ip);
@@ -682,7 +705,6 @@ void *RunBackupClientRDMA(void *arg)
 	session_data.ctx = xio_context_create(NULL, 0, -1);
 
 	/* create url to connect to */
-	//sprintf(url, "rdma://%s:%s", "10.0.0.1", "5555");//TODO: make configurable
 	sprintf(url, "rdma://%s:%s", addr->ip, addr->port);
 	free(addr->ip);
 	free(addr->port);
