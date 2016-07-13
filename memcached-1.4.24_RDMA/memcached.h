@@ -346,7 +346,11 @@ struct settings {
     char* shared_malloc_assoc_key; /* shared malloc for assoc.c key */
     bool failover_manager; /* failover manager on/off */
     char* failover_manager_ips; /* failover manager key for using shared malloc */
-    char* failover_comm_type; /* failover communication type for back. TCP or RDMA */
+    char* failover_comm_type; /* failover communication type for backup. TCP or RDMA */
+    bool failover_dest; /* failover backup destination ip are set */
+    char* failover_dest_ips; /* failover backup destination ips */
+    bool failover_src; /* failover backup source (this machines) ip is set */
+    char* failover_src_ips; /* failover backup source (this machine) ip to listen too */
 };
 
 extern struct stats stats;

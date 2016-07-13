@@ -14,7 +14,7 @@
 //bool create_backup(void);
 int sendBackupToClients(void);
 int BackupServer(void);
-int BackupClient(char *clientHostname);
+int BackupClient(char *clientHostnamePortwithPort);
 char** str_split(char* a_str, const char a_delim);
 int receive(int sockfd, char *buf, int *numbytes);
 

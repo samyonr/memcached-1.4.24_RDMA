@@ -22,7 +22,7 @@ int closeSocket(int sockfd);
 void sigchld_handler(int s);
 void *connection_handler(void *socket_desc);
 void *RunBackupServer(void *arg);
-int connectToServer(char *clientHostname, int *sockfd);
+int connectToServer(char *clientHostname, char *clientPort, int *sockfd);
 int ae_load_file_to_memory(const char *filename, char **result);
 int ae_load_memory_to_file(const char *filename, const char *data, const int size);
 
@@ -129,7 +129,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int connectToServer(char *clientHostname, int *sockfd)
+int connectToServer(char *clientHostname, char *clientPort, int *sockfd)
 {
     struct addrinfo hints, *servinfo, *p;
     int rv;
@@ -139,7 +139,7 @@ int connectToServer(char *clientHostname, int *sockfd)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    rv = getaddrinfo(clientHostname, "8888", &hints, &servinfo);
+    rv = getaddrinfo(clientHostname, clientPort, &hints, &servinfo);
     if (rv != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -247,7 +247,7 @@ int sendBackupToClients(void)
 }
 
 
-int BackupClient(char *clientHostname)
+int BackupClient(char *clientHostnamePortwithPort)
 {
 	if (g_backups_count >= MAX_BACKUPS)
 	{
@@ -255,7 +255,8 @@ int BackupClient(char *clientHostname)
 		return -1;
 	}
 
-    if (connectToServer(clientHostname, &g_client_socketfd[g_backups_count]) == 0)
+	char** hostAndPort = str_split(clientHostnamePortwithPort, ':');
+    if (connectToServer(hostAndPort[0], hostAndPort[1] , &g_client_socketfd[g_backups_count]) == 0)
     {
         g_backups_count++;
         return 0;

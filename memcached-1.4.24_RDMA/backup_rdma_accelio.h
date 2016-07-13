@@ -10,7 +10,7 @@
 
 
 
-int BackupServerRDMA(char *clientHostname, char *port);
-int BackupClientRDMA(char *clientHostname, char *port);
+int BackupServerRDMA(char *clientHostnamePortwithPort);
+int BackupClientRDMA(char *clientHostnamePortwithPort);
 
 #endif /* BACKUP_RDMA_ACCELIO_H_ */

@@ -48,6 +48,7 @@
 #include "queue.h"
 #include "backup_rdma_accelio.h"
 #include "libxio.h"
+#include "backup.h"
 
 void create_basic_request(struct xio_msg *req);
 void create_queue_data_request(struct xio_msg *req, int value);
@@ -542,14 +543,15 @@ void create_queue_data_request(struct xio_msg *req, int value)
 /*---------------------------------------------------------------------------*/
 /* main									     */
 /*---------------------------------------------------------------------------*/
-int BackupServerRDMA(char *clientHostname, char *port)
+int BackupServerRDMA(char *clientHostnamePortwithPort)
 {
     int rv;
-    struct addr	addr; //TODO: need to allocate?
-    addr.ip = clientHostname;
-    addr.port = port;
+	char** hostAndPort = str_split(clientHostnamePortwithPort, ':');
+    struct addr	*addr = (struct addr*)malloc(sizeof(struct addr));
+    addr->ip = hostAndPort[0];
+    addr->port = hostAndPort[1];
     //Create backup server thread
-    rv = pthread_create(&g_serverThread, NULL, RunBackupServerRDMA, (void*) &addr);
+    rv = pthread_create(&g_serverThread, NULL, RunBackupServerRDMA, (void*) addr);
     if(rv < 0)
     {
     	printf("Error creating backup server thread\n");
@@ -564,7 +566,7 @@ void *RunBackupServerRDMA(void *arg)
 	struct server_data	server_data;
 	char			url[256];
 	struct	xio_msg		*rsp;
-	struct addr 		addr = *(struct addr*)arg;
+	struct addr 		*addr = (struct addr*)arg;
 
 	/* initialize library */
 	xio_init();
@@ -595,8 +597,11 @@ void *RunBackupServerRDMA(void *arg)
 
 	/* create url to connect to */
 	//sprintf(url, "rdma://%s:%s", "10.0.0.1", "5555");//TODO: make configurable
-	sprintf(url, "rdma://%s:%s", addr.ip, addr.port);
+	sprintf(url, "rdma://%s:%s", addr->ip, addr->port);
 
+	free(addr->ip);
+	free(addr->port);
+	free(addr);
 	/* bind a listener server to a portal/url */
 	server = xio_bind(server_data.ctx, &server_ops,
 			  url, NULL, 0, &server_data);
@@ -624,7 +629,7 @@ void *RunBackupServerRDMA(void *arg)
 	exit(0);
 }
 
-int BackupClientRDMA(char *clientHostname, char *port)
+int BackupClientRDMA(char *clientHostnamePortwithPort)
 {
 	if (g_backups_RDMA_count >= MAX_RDMA_BACKUPS)
 	{
@@ -632,11 +637,12 @@ int BackupClientRDMA(char *clientHostname, char *port)
 		return -1;
 	}
 	int rv;
-    struct addr	addr; //TODO: need to allocate?
-    addr.ip = clientHostname;
-    addr.port = port;
+	char** hostAndPort = str_split(clientHostnamePortwithPort, ':');
+	struct addr	*addr = (struct addr*)malloc(sizeof(struct addr));
+	addr->ip = hostAndPort[0];
+	addr->port = hostAndPort[1];
     //Create backup server thread
-    rv = pthread_create(&g_clientThread, NULL, RunBackupClientRDMA, (void*) &addr);
+    rv = pthread_create(&g_clientThread, NULL, RunBackupClientRDMA, (void*) addr);
     if(rv < 0)
     {
     	printf("Error creating backup client thread\n");
@@ -655,7 +661,7 @@ void *RunBackupClientRDMA(void *arg)
 	struct xio_session_params	params;
 	struct xio_connection_params	cparams;
 	struct xio_msg			*req;
-	struct addr 			addr = *(struct addr*)arg;
+	struct addr 			*addr = (struct addr*)arg;
 
 	test_disconnect = 0;
 
@@ -677,7 +683,10 @@ void *RunBackupClientRDMA(void *arg)
 
 	/* create url to connect to */
 	//sprintf(url, "rdma://%s:%s", "10.0.0.1", "5555");//TODO: make configurable
-	sprintf(url, "rdma://%s:%s", addr.ip, addr.port);
+	sprintf(url, "rdma://%s:%s", addr->ip, addr->port);
+	free(addr->ip);
+	free(addr->port);
+	free(addr);
 
 	params.type		= XIO_SESSION_CLIENT;
 	params.ses_ops		= &ses_ops;

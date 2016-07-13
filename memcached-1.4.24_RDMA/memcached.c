@@ -109,8 +109,7 @@ struct stats stats;
 struct settings settings;
 time_t process_started;     /* when the process was started */
 conn **conns;
-char** g_backup_addr;
-char** g_backup_src_addr;
+char** g_backup_dest_addr;
 
 struct slab_rebalance slab_rebal;
 volatile int slab_rebalance_signal;
@@ -5560,7 +5559,7 @@ int main (int argc, char **argv) {
             	}
             	else
             	{
-            	    fprintf(stderr, "failover_comm_type argument isnt TCP of RDMA")l
+            	    fprintf(stderr, "failover_comm_type argument isnt TCP of RDMA");
             	    return 1;
             	}
             	break;
@@ -5584,23 +5583,23 @@ int main (int argc, char **argv) {
     	settings.failover_src &&
     	settings.failover_comm_type)
     {
-    	printf("Backup IPs=[%s]\n", settings.failover_dest_ips);
-    	g_backup_addr = str_split(settings.failover_dest_ips, ' ');
-    	g_backup_src_addr = str_split(settings.failover_src_ips, ':');
+    	printf("Backup dest IPs=[%s]\n", settings.failover_dest_ips);
+    	printf("Backup src IPs=[%s]\n", settings.failover_src_ips);
+    	g_backup_dest_addr = str_split(settings.failover_dest_ips, ' ');
     	queue_create();
 
-	if (g_backup_addr && g_backup_src_addr)
+	if (g_backup_dest_addr && settings.failover_src_ips)
 	{
-		if (strcmp(settings.failover_comm_type, "TCP" == 0))
+		if (strcmp(settings.failover_comm_type, "TCP") == 0)
 		{
-			BackupServer();
-	    		sleep(2);
-	    		int i;
-			for (i = 0; *(g_backup_addr + i); i++)
+			BackupServer(); //TODO: pass failover_dest_ips here
+	    	sleep(2); //TODO: remove it, only for testing
+	    	int i;
+			for (i = 0; *(g_backup_dest_addr + i); i++)
 			{
-				printf("IP=[%s]\n", *(g_backup_addr + i));
+				printf("IP=[%s]\n", *(g_backup_dest_addr + i));
 				printf("connecting\n");
-				if (BackupClient(*(g_backup_addr + i)) == 0)
+				if (BackupClient(*(g_backup_dest_addr + i)) == 0)
 				{
 					printf("connected\n");
 					//int numbytes;
@@ -5611,15 +5610,21 @@ int main (int argc, char **argv) {
 				{
 					printf("failed to connect\n");
 				}
-				//TODO: free(*(g_backup_addr + i)); ? 
+				//TODO: free(*(g_backup_dest_addr + i)); ?
 			}
-			//TODO: free(g_backup_addr);
+			//TODO: free(g_backup_dest_addr);
 		}
 		else //RDMA
 		{
-	    		BackupServerRDMA(*(g_backup_src_addr + 0));
+	    		BackupServerRDMA(settings.failover_src_ips);
 	    		sleep(2); //TODO: remove it, only for testing
-	    		BackupClientRDMA(*(g_backup_addr + 0)); //TODO: use for-loop, split by : first
+		    	int i;
+				for (i = 0; *(g_backup_dest_addr + i); i++)
+				{
+					printf("IP=[%s]\n", *(g_backup_dest_addr + i));
+					BackupClientRDMA(*(g_backup_dest_addr + i)); //TODO: add RDMA/TCP log. and success/fail log
+				}
+
 		}
 	}
     }
