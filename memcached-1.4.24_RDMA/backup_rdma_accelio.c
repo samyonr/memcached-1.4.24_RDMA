@@ -51,9 +51,10 @@
 #include "backup.h"
 
 void create_basic_request(struct xio_msg *req);
-void create_queue_data_request(struct xio_msg *req, int value);
+void create_queue_data_request(struct xio_msg *req);
 void *RunBackupServerRDMA(void *arg);
-int rdma_load_file_to_memory(const char *filename, char **result);
+long rdma_load_file_to_memory(const char *filename, char **result);
+int rdma_load_memory_to_file(const char *filename, const char *data, const int size, char *opentype);
 void *RunBackupClientRDMA(void *arg);
 static int on_session_event_client(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
@@ -71,16 +72,28 @@ static int on_request_server(struct xio_session *session,
 		      struct xio_msg *req,
 		      int last_in_rxq,
 		      void *cb_user_context);
+void send_file_continue(struct xio_msg *req, int stepNumber);
 
-#define QUEUE_DEPTH		512
+#define QUEUE_DEPTH			512
 #define PRINT_COUNTER		4000000
 #define DISCONNECT_NR		(2 * PRINT_COUNTER)
-
+#define MAX_MESSAGE_SIZE	1048576 // = 2 ^ 20 = the maximum size of the block that can be registered is limited to device_attr.max_mr_size
 #define MAX_RDMA_BACKUPS	3
 
 
 static pthread_t g_serverThread;
 static pthread_t g_clientThread;
+int g_clientSendFile;
+char *g_clientFileData;
+long g_clientFilePos;
+long g_clientFileSize;
+// 4 steps:
+// (0) Doing nothing
+// (1) TX assoc.c (primary_hashtable) - 16 MB (actually, 16 MiB)
+// (2) TX slabs.c (mem_base) - 4 GB
+// (3) TX slabs.c (mem_slabs_lists_base) - 4 KB
+int g_clientStep;
+
 int test_disconnect;
 int g_backups_RDMA_count = 0;
 int g_queue_depth;
@@ -211,12 +224,15 @@ static int on_response_client(struct xio_session *session,
 	}
 
 	//check if there a message waiting in the queue
-	if (!queue_empty())
+	if (!queue_empty() || g_clientSendFile)
 	{
-		queue_val = queue_frontelement();
-		printf("Got something in the queue! value = %d\n",queue_val);
-		queue_deq();
-		create_queue_data_request(req, queue_val);
+		if (!g_clientSendFile)
+		{
+			queue_val = queue_frontelement();
+			printf("Got something in the queue! value = %d\n",queue_val);
+			queue_deq();
+		}
+		create_queue_data_request(req);
 	}
 	else
 	{
@@ -235,9 +251,9 @@ static int on_response_client(struct xio_session *session,
 }
 
 
-int rdma_load_file_to_memory(const char *filename, char **result)
+long rdma_load_file_to_memory(const char *filename, char **result)
 {
-	int size = 0;
+	long size = 0;
 	FILE *f = fopen(filename, "rb");
 	if (f == NULL)
 	{
@@ -255,8 +271,24 @@ int rdma_load_file_to_memory(const char *filename, char **result)
 	}
 	fclose(f);
 	(*result)[size] = 0;
-	free(*result);
 	return size;
+}
+
+int rdma_load_memory_to_file(const char *filename, const char *data, const int size, char *opentype)
+{
+	FILE *f = fopen(filename, opentype);
+	if (f == NULL)
+	{
+		return -1;
+	}
+	if (fwrite(data, sizeof(char), size, f) == 0)
+	{
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
+	return 1;
+
 }
 
 /*---------------------------------------------------------------------------*/
@@ -310,9 +342,9 @@ static void process_request_server(struct server_data *server_data,
 			    struct xio_msg *req)
 {
 	struct xio_iovec_ex	*sglist = vmsg_sglist(&req->in);
-	char			*str;
+	char			*str_header, *str_body;
 	int			nents = vmsg_sglist_nents(&req->in);
-	int			len, i;
+	int			len_header, len_body, i;
 	char			tmp;
 
 	if (strcmp((char *)req->in.header.iov_base,"beacon request header") == 0)
@@ -323,29 +355,29 @@ static void process_request_server(struct server_data *server_data,
 		 * the printf
 		 */
 		if (++server_data->cnt == PRINT_COUNTER) {
-			str = (char *)req->in.header.iov_base;
-			len = req->in.header.iov_len;
-			if (str) {
-				if (((unsigned)len) > 64)
-					len = 64;
-				tmp = str[len];
-				str[len] = '\0';
+			str_header = (char *)req->in.header.iov_base;
+			len_header = req->in.header.iov_len;
+			if (str_header) {
+				if (((unsigned)len_header) > 64)
+					len_header = 64;
+				tmp = str_header[len_header];
+				str_header[len_header] = '\0';
 				printf("message header : [%llu] - %s\n",
-					   (unsigned long long)(req->sn + 1), str);
-				str[len] = tmp;
+					   (unsigned long long)(req->sn + 1), str_header);
+				str_header[len_header] = tmp;
 			}
 			for (i = 0; i < nents; i++) {
-				str = (char *)sglist[i].iov_base;
-				len = sglist[i].iov_len;
-				if (str) {
-					if (((unsigned)len) > 64)
-						len = 64;
-					tmp = str[len];
-					str[len] = '\0';
+				str_body = (char *)sglist[i].iov_base;
+				len_body = sglist[i].iov_len;
+				if (str_body) {
+					if (((unsigned)len_body) > 64)
+						len_body = 64;
+					tmp = str_body[len_body];
+					str_body[len_body] = '\0';
 					printf("message data: [%llu][%d][%d] - %s\n",
 						   (unsigned long long)(req->sn + 1),
-						   i, len, str);
-					str[len] = tmp;
+						   i, len_body, str_body);
+					str_body[len_body] = tmp;
 				}
 			}
 			server_data->cnt = 0;
@@ -356,33 +388,41 @@ static void process_request_server(struct server_data *server_data,
 	}
 	else
 	{
-		str = (char *)req->in.header.iov_base;
-		len = req->in.header.iov_len;
-		if (str) {
-			if (((unsigned)len) > 64)
-				len = 64;
-			tmp = str[len];
-			str[len] = '\0';
-			printf("message header : [%llu] - %s\n",
-				   (unsigned long long)(req->sn + 1), str);
-			str[len] = tmp;
-		}
-		for (i = 0; i < nents; i++) {
+		str_header = (char *)req->in.header.iov_base;
+		len_header = req->in.header.iov_len;
+
+		printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
+
+		for (i = 0; i < nents; i++)
+		{
 			//printf("message data : %d\n", *(int *)sglist[i].iov_base);
 
-			str = (char *)sglist[i].iov_base;
-			len = sglist[i].iov_len;
-			ae_load_memory_to_file("/tmp/memkey/assoc_key2", str, len);
+			str_body = (char *)sglist[i].iov_base;
+			len_body = sglist[i].iov_len;
 
-			if (str) {
-				if (((unsigned)len) > 64)
-					len = 64;
-				tmp = str[len];
-				str[len] = '\0';
-				printf("message data: [%llu][%d][%d] - %s\n",
-					   (unsigned long long)(req->sn + 1),
-					   i, len, str);
-				str[len] = tmp;
+			if (strncmp(str_header,"queue data step 1 sending",25) == 0)
+			{
+				rdma_load_memory_to_file("/tmp/memkey/assoc_key2", str_body, len_body, "ab");
+			}
+			else if (strncmp(str_header,"queue data step 1 start",23) == 0)
+			{
+				rdma_load_memory_to_file("/tmp/memkey/assoc_key2", str_body, len_body, "wb");
+			}
+			else if (strncmp(str_header,"queue data step 2 sending",25) == 0)
+			{
+				rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "ab");
+			}
+			else if (strncmp(str_header,"queue data step 2 start",23) == 0)
+			{
+				rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "wb");
+			}
+			else if (strncmp(str_header,"queue data step 3 sending",25) == 0)
+			{
+				rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "ab");
+			}
+			else if (strncmp(str_header,"queue data step 3 start",23) == 0)
+			{
+				rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "wb");
 			}
 		}
 		server_data->cnt = 0;
@@ -509,43 +549,140 @@ void create_basic_request(struct xio_msg *req)
 	req->out.data_iov.nents = 1;
 }
 
-void create_queue_data_request(struct xio_msg *req, int value)
+void send_file_continue(struct xio_msg *req, int stepNumber)
+{
+	int message_size = 0;
+	char buffer[50];
+	int n, i;
+
+	if ((g_clientFileSize - g_clientFilePos) < MAX_MESSAGE_SIZE)
+	{
+		message_size = g_clientFileSize - g_clientFilePos;
+	}
+	else
+	{
+		message_size = MAX_MESSAGE_SIZE;
+	}
+
+	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * message_size);
+	for (i = 0; i < sizeof(char) * message_size; i++)
+	{
+		((char *)(req->out.data_iov.sglist[0].iov_base))[i] = (g_clientFileData + g_clientFilePos)[i];
+	}
+	//snprintf(req->out.data_iov.sglist[0].iov_base, message_size, g_clientFileData + g_clientFilePos);
+	req->out.data_iov.sglist[0].iov_len = sizeof(char) * message_size;
+
+	if (g_clientFilePos == 0 && (message_size == g_clientFileSize - g_clientFilePos))
+	{
+		n = sprintf (buffer, "queue data step %d start sending final", stepNumber);
+		g_clientStep = (g_clientStep+1) % 4;
+		if (g_clientStep == 0)
+		{
+			g_clientSendFile = 0;
+		}
+
+		g_clientFilePos = 0;
+		free(g_clientFileData);
+	}
+	else if (g_clientFilePos == 0)
+	{
+		n = sprintf (buffer, "queue data step %d start sending", stepNumber);
+		g_clientFilePos += message_size;
+	}
+	else if (message_size == g_clientFileSize - g_clientFilePos)
+	{
+		n = sprintf (buffer, "queue data step %d sending final", stepNumber);
+		g_clientStep = (g_clientStep+1) % 4;
+		if (g_clientStep == 0)
+		{
+			g_clientSendFile = 0;
+		}
+
+		g_clientFilePos = 0;
+		free(g_clientFileData);
+	}
+	else
+	{
+		n = sprintf (buffer, "queue data step %d sending", stepNumber);
+		g_clientFilePos += message_size;
+	}
+
+	buffer[n] = '\0';
+	req->out.header.iov_base = strdup(buffer);
+}
+
+void create_queue_data_request(struct xio_msg *req)
 {
 	//int length = snprintf(NULL, 0, "queue data request body, value=%d", value);
 	//void * p;
 
-	char *content;
-	long size;
-
-	req->out.header.iov_base =
-		strdup("queue data request header");
-	req->out.header.iov_len =
-		strlen((const char *)
-			req->out.header.iov_base) + 1;
 	req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
 	req->in.data_iov.max_nents = XIO_IOVLEN;
 
 	req->out.sgl_type	   = XIO_SGL_TYPE_IOV;
 	req->out.data_iov.max_nents = XIO_IOVLEN;
 
+	req->out.data_iov.nents = 1;
 
-
-	size = ae_load_file_to_memory("/tmp/memkey/assoc_key1", &content);
-	if (size < 0)
+	if (!g_clientSendFile)
 	{
-		puts("Error loading file");
-		exit(1);
+		g_clientSendFile = 1;
+		g_clientStep = 1;
 	}
 
+	if (g_clientStep == 1 && g_clientFilePos == 0)
+	{
+		printf("client backup moved to step 1\n");
+		g_clientFileSize = 0;
+		g_clientFilePos = 0;
+
+		g_clientFileSize = rdma_load_file_to_memory("/tmp/memkey/assoc_key1", &g_clientFileData);
+		send_file_continue(req, 1);
+
+	}
+	else if (g_clientStep == 1 && g_clientFilePos != 0)
+	{
+		send_file_continue(req, 1);
+	}
+	else if (g_clientStep == 2 && g_clientFilePos == 0)
+	{
+		printf("client backup moved to step 2\n");
+		g_clientFileSize = 0;
+		g_clientFilePos = 0;
+
+		g_clientFileSize = rdma_load_file_to_memory("/tmp/memkey/slabs_key1", &g_clientFileData);
+		send_file_continue(req, 2);
+	}
+	else if (g_clientStep == 2 && g_clientFilePos != 0)
+	{
+		send_file_continue(req, 2);
+	}
+	else if (g_clientStep == 3 && g_clientFilePos == 0)
+	{
+		printf("client backup moved to step 3\n");
+		g_clientFileSize = 0;
+		g_clientFilePos = 0;
+
+		g_clientFileSize = rdma_load_file_to_memory("/tmp/memkey/slabs_lists_key1", &g_clientFileData);
+		send_file_continue(req, 3);
+	}
+	else // (g_clientStep == 3 && g_clientFilePos != 0)
+	{
+		send_file_continue(req, 3);
+	}
+
+	req->out.header.iov_len =
+		strlen((const char *)
+			req->out.header.iov_base) + 1;
+
+
 	//req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * size);
-	//1048576 = 2 ^ 20 = he maximum size of the block that can be registered is limited to device_attr.max_mr_size
-	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * 1048576);
+
 	//snprintf(req->out.data_iov.sglist[0].iov_base, size, content);
-	snprintf(req->out.data_iov.sglist[0].iov_base, 1048576, content);
+
 	//p = req->out.data_iov.sglist[0].iov_base;
 	//((char *)p)[0] = content;
 	//req->out.data_iov.sglist[0].iov_len = sizeof(char) * size;
-	req->out.data_iov.sglist[0].iov_len = sizeof(char) * 1048576;
 	/*
 	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(int));
 	p = req->out.data_iov.sglist[0].iov_base;
@@ -561,7 +698,7 @@ void create_queue_data_request(struct xio_msg *req, int value)
 		   + 1;
 	*/
 
-	req->out.data_iov.nents = 1;
+
 }
 
 /*---------------------------------------------------------------------------*/
