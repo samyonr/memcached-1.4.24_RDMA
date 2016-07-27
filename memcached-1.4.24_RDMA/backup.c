@@ -13,8 +13,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <assert.h>
-
-#define PORT "8888" // the port client will be connecting to
+#include "queue.h"
 
 #define MAXDATASIZE 1000 // max number of bytes we can get at once
 void *get_in_addr(struct sockaddr *sa);
@@ -22,15 +21,17 @@ int closeSocket(int sockfd);
 void sigchld_handler(int s);
 void *connection_handler(void *socket_desc);
 void *RunBackupServer(void *arg);
+void *RunBackupClient(void *arg);
 int connectToServer(char *clientHostname, char *clientPort, int *sockfd);
+int sendBackupToClients(char *fileToSend, char *msg, int msgSize);
 
 static pthread_t g_serverThread;
 static int g_backups_count = 0;
 static int g_client_socketfd[MAX_BACKUPS];
 
-int ae_load_file_to_memory(const char *filename, char **result)
+long ae_load_file_to_memory(const char *filename, char **result)
 {
-	int size = 0;
+	long size = 0;
 	FILE *f = fopen(filename, "rb");
 	if (f == NULL)
 	{
@@ -51,7 +52,7 @@ int ae_load_file_to_memory(const char *filename, char **result)
 	return size;
 }
 
-int ae_load_memory_to_file(const char *filename, const char *data, const int size)
+long ae_load_memory_to_file(const char *filename, const char *data, const int size)
 {
 	FILE *f = fopen(filename, "wb");
 	if (f == NULL)
@@ -212,14 +213,14 @@ void sigchld_handler(int s)
     errno = saved_errno;
 }
 
-int sendBackupToClients(void)
+int sendBackupToClients(char *fileToSend, char *msg, int msgSize)
 {
 	int i;
 	char *content;
 	char *content_temp;
 	long size, size_temp;
 	ssize_t n;
-	size = ae_load_file_to_memory("/tmp/memkey/assoc_key1", &content);
+	size = ae_load_file_to_memory(fileToSend, &content);
 	if (size < 0)
 	{
 		puts("Error loading file");
@@ -229,12 +230,10 @@ int sendBackupToClients(void)
 	{
 		size_temp = size;
 		content_temp = content;
+		send((g_client_socketfd[i]), msg, msgSize, 0);
 		send((g_client_socketfd[i]), &size_temp, sizeof(long), 0);
 		do
 		{
-			// putchar(content[size-1]);
-			//TODO: if open
-			//char c = content[size_temp-1];
 			n = send((g_client_socketfd[i]), content_temp, size_temp, 0);
 			content_temp += n;
 			size_temp -= n;
@@ -247,30 +246,48 @@ int sendBackupToClients(void)
 
 int BackupClient(char *clientHostnamePortwithPort)
 {
+	int rv;
+	char** hostAndPort = str_split(clientHostnamePortwithPort, ':');
+	struct addr	*addr = (struct addr*)malloc(sizeof(struct addr));
+	addr->ip = hostAndPort[0];
+	addr->port = hostAndPort[1];
+
 	if (g_backups_count >= MAX_BACKUPS)
 	{
 		printf("Maximal number of backups reached\n");
 		return -1;
 	}
 
-	char** hostAndPort = str_split(clientHostnamePortwithPort, ':');
-    if (connectToServer(hostAndPort[0], hostAndPort[1] , &g_client_socketfd[g_backups_count]) == 0)
-    {
-        g_backups_count++;
-        return 0;
-    }
-    else
+    if (connectToServer(hostAndPort[0], hostAndPort[1] , &g_client_socketfd[g_backups_count]) != 0)
     {
     	printf("Error creating client connection\n");
     	return -1;
+
     }
+    g_backups_count++;
+
+    //Create backup server thread
+    rv = pthread_create(&g_serverThread, NULL, RunBackupClient, (void*) addr);
+    if(rv < 0)
+    {
+    	printf("Error creating backup client thread\n");
+    	return -1;
+    }
+
+    return 0;
+
 }
 
-int BackupServer(void)
+int BackupServer(char *clientHostnamePortwithPort)
 {
 	int rv;
+	char** hostAndPort = str_split(clientHostnamePortwithPort, ':');
+	struct addr	*addr = (struct addr*)malloc(sizeof(struct addr));
+	addr->ip = hostAndPort[0];
+	addr->port = hostAndPort[1];
+
     //Create backup server thread
-    rv = pthread_create(&g_serverThread, NULL, RunBackupServer, NULL);
+    rv = pthread_create(&g_serverThread, NULL, RunBackupServer, (void*) addr);
     if(rv < 0)
     {
     	printf("Error creating backup server thread\n");
@@ -278,6 +295,26 @@ int BackupServer(void)
     return 0;
 }
 
+void *RunBackupClient(void *arg)
+{
+	int queue_val;
+
+	while (1)
+	{
+		//check if there a message waiting in the queue
+		if (!queue_empty())
+		{
+				queue_val = queue_frontelement();
+				printf("Got something in the queue! value = %d\n",queue_val);
+				queue_deq();
+				sendBackupToClients("/tmp/memkey/assoc_key1","queue data step 1 sending", 25);
+				sendBackupToClients("/tmp/memkey/slabs_key1","queue data step 2 sending", 25);
+				sendBackupToClients("/tmp/memkey/slabs_lists_key1","queue data step 3 sending", 25);
+
+		}
+		sleep(2);
+	}
+}
 
 void *RunBackupServer(void *arg)
 {
@@ -289,13 +326,14 @@ void *RunBackupServer(void *arg)
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
+    struct addr 		*addr = (struct addr*)arg;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
 
-    rv = getaddrinfo(NULL, PORT, &hints, &servinfo);
+    rv = getaddrinfo(NULL, addr->port, &hints, &servinfo);
     if (rv != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -388,52 +426,199 @@ void *connection_handler(void *socket_desc)
 	int received = 0;
 	int sock = *(int*)socket_desc;
 	long data_size = 0;
+	char msg[25];
 	char data[MAXDATASIZE];
+	int step = 0;
+	data_size = 0;
+	FILE *f = NULL;
 	while (1)
 	{
 		received = 0;
-		data_size = 0;
 		memset(data, 0, MAXDATASIZE);
-		received = recv(sock, &data_size, sizeof(long), 0);
-		if (received == -1)
+		memset(msg, 0, 25);
+		if (step == 0)
 		{
-			printf("error0\n");
-		}
-		FILE *f = fopen("/tmp/memkey/assoc_key1_copy", "wb");
-		if (f == NULL)
-		{
-			printf("error1\n");
-			return 0;
-		}
-		while (data_size > 0)
-		{
-			received = recv(sock, data, MAXDATASIZE, 0);
-			if (received == -1)
+			received = recv(sock, &msg, sizeof(char) * 25, 0);
+			if (received == -1 || received != 25)
 			{
-				printf("error00\n");
+				printf("error0\n");
 			}
-			data_size -= received;
-			if (fwrite(data, sizeof(char), received, f) == 0)
+			if (strncmp(msg,"queue data step 1 sending",25) == 0)
 			{
-				printf("error2\n");
-				fclose(f);
-				return 0;
+				received = recv(sock, &data_size, sizeof(long), 0);
+				if (received == -1)
+				{
+					printf("error1\n");
+				}
+				step = 1;
+				f = fopen("/tmp/memkey/assoc_key2", "wb");
+				if (f == NULL)
+				{
+					printf("error2\n");
+					return 0;
+				}
 			}
+			printf("Moving to step 1\n");
 		}
-
-		fclose(f);
-		printf("downloaded succesfully\n");
-		/*
-		if (send(sock, "Hello, world!", 13, 0) == -1)
+		if (step == 1 && data_size != 0)
 		{
-			perror("send\n");
+			while (data_size > 0)
+			{
+				memset(data, 0, MAXDATASIZE);
+				if (data_size < MAXDATASIZE)
+				{
+					received = recv(sock, data, data_size, 0);
+				}
+				else
+				{
+					received = recv(sock, data, MAXDATASIZE, 0);
+				}
+				if (received == -1)
+				{
+					printf("error3\n");
+				}
+				data_size -= received;
+				if (fwrite(data, sizeof(char), received, f) == 0)
+				{
+					printf("error4\n");
+					fclose(f);
+					return 0;
+				}
+			}
+			fclose(f);
+			printf("Finished step 1\n");
 		}
-		while(i < 10000000)
+		if (step == 1 && data_size == 0)
 		{
-			send(sock, "a", 1, 0);
-			i++;
-		}*/
+			received = recv(sock, &msg, sizeof(char) * 25, 0);
+			if (received == -1 || received != 25)
+			{
+				printf("error5\n");
+			}
+			if (strncmp(msg,"queue data step 2 sending",25) == 0)
+			{
+				received = recv(sock, &data_size, sizeof(long), 0);
+				if (received == -1)
+				{
+					printf("error6\n");
+				}
+				step = 2;
+				f = fopen("/tmp/memkey/slabs_key2", "wb");
+				if (f == NULL)
+				{
+					printf("error7\n");
+					return 0;
+				}
+			}
+			printf("Moving to step 2\n");
+		}
+		if (step == 2 && data_size != 0)
+		{
+			while (data_size > 0)
+			{
+				memset(data, 0, MAXDATASIZE);
+				if (data_size < MAXDATASIZE)
+				{
+					received = recv(sock, data, data_size, 0);
+				}
+				else
+				{
+					received = recv(sock, data, MAXDATASIZE, 0);
+				}
+				if (received == -1)
+				{
+					printf("error8\n");
+				}
+				data_size -= received;
+				if (fwrite(data, sizeof(char), received, f) == 0)
+				{
+					printf("error9\n");
+					fclose(f);
+					return 0;
+				}
+			}
+			fclose(f);
+			printf("Finished step 2\n");
+		}
+		if (step == 1 && data_size == 0)
+		{
+			received = recv(sock, &msg, sizeof(char) * 25, 0);
+			if (received == -1 || received != 25)
+			{
+				printf("error5\n");
+			}
+			if (strncmp(msg,"queue data step 2 sending",25) == 0)
+			{
+				received = recv(sock, &data_size, sizeof(long), 0);
+				if (received == -1)
+				{
+					printf("error6\n");
+				}
+				step = 2;
+				f = fopen("/tmp/memkey/slabs_key2", "wb");
+				if (f == NULL)
+				{
+					printf("error7\n");
+					return 0;
+				}
+			}
+			printf("Moving to step 2\n");
+		}
+		if (step == 2 && data_size == 0)
+		{
+			received = recv(sock, &msg, sizeof(char) * 25, 0);
+			if (received == -1 || received != 25)
+			{
+				printf("error10\n");
+			}
+			if (strncmp(msg,"queue data step 3 sending",25) == 0)
+			{
+				received = recv(sock, &data_size, sizeof(long), 0);
+				if (received == -1)
+				{
+					printf("error11\n");
+				}
+				step = 3;
+				f = fopen("/tmp/memkey/slabs_lists_key2", "wb");
+				if (f == NULL)
+				{
+					printf("error12\n");
+					return 0;
+				}
+			}
+			printf("Moving to step 3\n");
+		}
+		if (step == 3 && data_size != 0)
+		{
+			while (data_size > 0)
+			{
+				memset(data, 0, MAXDATASIZE);
+				if (data_size < MAXDATASIZE)
+				{
+					received = recv(sock, data, data_size, 0);
+				}
+				else
+				{
+					received = recv(sock, data, MAXDATASIZE, 0);
+				}
+				if (received == -1)
+				{
+					printf("error13\n");
+				}
+				data_size -= received;
+				if (fwrite(data, sizeof(char), received, f) == 0)
+				{
+					printf("error14\n");
+					fclose(f);
+					return 0;
+				}
+			}
+			fclose(f);
+			printf("Finished step 3\n");
+		}
+		step = 0;
 	}
     close(sock);
+    printf("Downloaded backup successfully\n");
     return 0;
 }

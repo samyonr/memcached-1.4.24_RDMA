@@ -12,12 +12,16 @@
 
 //void backup_init(void);
 //bool create_backup(void);
-int sendBackupToClients(void);
-int BackupServer(void);
+int BackupServer(char *clientHostnamePortwithPort);
 int BackupClient(char *clientHostnamePortwithPort);
 char** str_split(char* a_str, const char a_delim);
 int receive(int sockfd, char *buf, int *numbytes);
-int ae_load_file_to_memory(const char *filename, char **result);
-int ae_load_memory_to_file(const char *filename, const char *data, const int size);
+long ae_load_file_to_memory(const char *filename, char **result);
+long ae_load_memory_to_file(const char *filename, const char *data, const int size);
+
+struct addr {
+	char		*ip;
+	char		*port;
+};
 
 #endif /* BACKUP_H_ */

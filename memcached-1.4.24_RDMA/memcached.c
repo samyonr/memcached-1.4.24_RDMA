@@ -5592,7 +5592,7 @@ int main (int argc, char **argv) {
 	{
 		if (strcmp(settings.failover_comm_type, "TCP") == 0)
 		{
-			BackupServer(); //TODO: pass failover_dest_ips here
+			BackupServer(settings.failover_src_ips);
 	    	sleep(2); //TODO: remove it, only for testing
 	    	int i;
 			for (i = 0; *(g_backup_dest_addr + i); i++)

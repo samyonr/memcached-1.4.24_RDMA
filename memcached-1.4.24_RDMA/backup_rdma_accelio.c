@@ -99,10 +99,7 @@ int g_backups_RDMA_count = 0;
 int g_queue_depth;
 int g_server_connected = 0;
 
-struct addr {
-	char		*ip;
-	char		*port;
-};
+
 
 /* server private data */
 struct server_data {
