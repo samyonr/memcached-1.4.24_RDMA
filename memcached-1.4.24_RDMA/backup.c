@@ -16,7 +16,7 @@
 #include "queue.h"
 #include "sharedmalloc.h"
 
-#define MAXDATASIZE 1000 // max number of bytes we can get at once
+#define MAXDATASIZE 10000 // max number of bytes we can get at once
 void *get_in_addr(struct sockaddr *sa);
 int closeSocket(int sockfd);
 void sigchld_handler(int s);
@@ -432,9 +432,9 @@ void *connection_handler(void *socket_desc)
 	char data[MAXDATASIZE];
 	int step = 0;
 	data_size = 0;
-	void *memcached1_slabs;
-	void *memcached1_slabs_lists;
-	void *memcached1_assoc;
+	void *memcached1_slabs = NULL;
+	void *memcached1_slabs_lists = NULL;
+	void *memcached1_assoc = NULL;
 	//FILE *f = NULL;
 	while (1)
 	{
