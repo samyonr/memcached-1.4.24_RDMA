@@ -451,7 +451,7 @@ void *connection_handler(void *socket_desc)
 					printf("error1\n");
 				}
 				step = 1;
-				f = fopen("/tmp/memkey/assoc_key2", "wb");
+				f = fopen("/tmp/memkey/assoc_key1", "wb");
 				if (f == NULL)
 				{
 					printf("error2\n");
@@ -503,7 +503,7 @@ void *connection_handler(void *socket_desc)
 					printf("error6\n");
 				}
 				step = 2;
-				f = fopen("/tmp/memkey/slabs_key2", "wb");
+				f = fopen("/tmp/memkey/slabs_key1", "wb");
 				if (f == NULL)
 				{
 					printf("error7\n");
@@ -540,30 +540,6 @@ void *connection_handler(void *socket_desc)
 			fclose(f);
 			printf("Finished step 2\n");
 		}
-		if (step == 1 && data_size == 0)
-		{
-			received = recv(sock, &msg, sizeof(char) * 25, 0);
-			if (received == -1 || received != 25)
-			{
-				printf("error5\n");
-			}
-			if (strncmp(msg,"queue data step 2 sending",25) == 0)
-			{
-				received = recv(sock, &data_size, sizeof(long), 0);
-				if (received == -1)
-				{
-					printf("error6\n");
-				}
-				step = 2;
-				f = fopen("/tmp/memkey/slabs_key2", "wb");
-				if (f == NULL)
-				{
-					printf("error7\n");
-					return 0;
-				}
-			}
-			printf("Moving to step 2\n");
-		}
 		if (step == 2 && data_size == 0)
 		{
 			received = recv(sock, &msg, sizeof(char) * 25, 0);
@@ -579,7 +555,7 @@ void *connection_handler(void *socket_desc)
 					printf("error11\n");
 				}
 				step = 3;
-				f = fopen("/tmp/memkey/slabs_lists_key2", "wb");
+				f = fopen("/tmp/memkey/slabs_lists_key1", "wb");
 				if (f == NULL)
 				{
 					printf("error12\n");
