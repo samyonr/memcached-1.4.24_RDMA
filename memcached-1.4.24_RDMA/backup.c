@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include "queue.h"
+#include "sharedmalloc.h"
 
 #define MAXDATASIZE 1000 // max number of bytes we can get at once
 void *get_in_addr(struct sockaddr *sa);
@@ -426,11 +427,15 @@ void *connection_handler(void *socket_desc)
 	int received = 0;
 	int sock = *(int*)socket_desc;
 	long data_size = 0;
+	long original_data_size = 0;
 	char msg[25];
 	char data[MAXDATASIZE];
 	int step = 0;
 	data_size = 0;
-	FILE *f = NULL;
+	void *memcached1_slabs;
+	void *memcached1_slabs_lists;
+	void *memcached1_assoc;
+	//FILE *f = NULL;
 	while (1)
 	{
 		received = 0;
@@ -450,15 +455,20 @@ void *connection_handler(void *socket_desc)
 				{
 					printf("error1\n");
 				}
+				original_data_size = data_size;
 				step = 1;
-				f = fopen("/tmp/memkey/assoc_key1", "wb");
+				memcached1_assoc = shared_malloc(NULL, original_data_size,"assoc_key1",HARD_LOCK);
+				//f = fopen("/tmp/memkey/assoc_key1", "wb");
+				/*
 				if (f == NULL)
 				{
 					printf("error2\n");
 					return 0;
 				}
+				*/
+				printf("Moving to step 1\n");
 			}
-			printf("Moving to step 1\n");
+
 		}
 		if (step == 1 && data_size != 0)
 		{
@@ -477,15 +487,21 @@ void *connection_handler(void *socket_desc)
 				{
 					printf("error3\n");
 				}
+				memcpy((char *)memcached1_assoc + original_data_size - data_size, data,received);
+
 				data_size -= received;
+				/*
 				if (fwrite(data, sizeof(char), received, f) == 0)
 				{
 					printf("error4\n");
 					fclose(f);
 					return 0;
 				}
+				*/
 			}
-			fclose(f);
+			//fclose(f);
+			shared_free(memcached1_assoc, original_data_size);
+			original_data_size = 0;
 			printf("Finished step 1\n");
 		}
 		if (step == 1 && data_size == 0)
@@ -502,13 +518,18 @@ void *connection_handler(void *socket_desc)
 				{
 					printf("error6\n");
 				}
+				original_data_size = data_size;
 				step = 2;
+
+				/*
 				f = fopen("/tmp/memkey/slabs_key1", "wb");
 				if (f == NULL)
 				{
 					printf("error7\n");
 					return 0;
 				}
+				*/
+				memcached1_slabs = shared_malloc(NULL, original_data_size, "slabs_key1", HARD_LOCK);
 			}
 			printf("Moving to step 2\n");
 		}
@@ -529,15 +550,23 @@ void *connection_handler(void *socket_desc)
 				{
 					printf("error8\n");
 				}
+
+				memcpy((char *)memcached1_slabs + original_data_size - data_size, data,received);
+
 				data_size -= received;
+
+				/*
 				if (fwrite(data, sizeof(char), received, f) == 0)
 				{
 					printf("error9\n");
 					fclose(f);
 					return 0;
 				}
+				*/
 			}
-			fclose(f);
+			shared_free(memcached1_slabs, original_data_size);
+			original_data_size = 0;
+			//fclose(f);
 			printf("Finished step 2\n");
 		}
 		if (step == 2 && data_size == 0)
@@ -550,17 +579,22 @@ void *connection_handler(void *socket_desc)
 			if (strncmp(msg,"queue data step 3 sending",25) == 0)
 			{
 				received = recv(sock, &data_size, sizeof(long), 0);
+				original_data_size = data_size;
 				if (received == -1)
 				{
 					printf("error11\n");
 				}
 				step = 3;
+
+				memcached1_slabs_lists = shared_malloc(NULL, original_data_size, "slabs_lists_key1", HARD_LOCK);
+				/*
 				f = fopen("/tmp/memkey/slabs_lists_key1", "wb");
 				if (f == NULL)
 				{
 					printf("error12\n");
 					return 0;
 				}
+				*/
 			}
 			printf("Moving to step 3\n");
 		}
@@ -581,15 +615,22 @@ void *connection_handler(void *socket_desc)
 				{
 					printf("error13\n");
 				}
+
+				memcpy((char *)memcached1_slabs_lists + original_data_size - data_size, data,received);
+
 				data_size -= received;
+				/*
 				if (fwrite(data, sizeof(char), received, f) == 0)
 				{
 					printf("error14\n");
 					fclose(f);
 					return 0;
 				}
+				*/
 			}
-			fclose(f);
+			shared_free(memcached1_slabs_lists, original_data_size);
+			original_data_size = 0;
+			//fclose(f);
 			printf("Finished step 3\n");
 		}
 		step = 0;
