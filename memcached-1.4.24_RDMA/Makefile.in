@@ -162,7 +162,8 @@ am__objects_7 = memcached_debug-memcached.$(OBJEXT) \
 	$(am__objects_5) $(am__objects_6)
 am_memcached_debug_OBJECTS = $(am__objects_7)
 memcached_debug_OBJECTS = $(am_memcached_debug_OBJECTS)
-memcached_debug_LINK = $(CCLD) $(memcached_debug_CFLAGS) $(CFLAGS) \
+memcached_debug_LINK_EXEC = $(CCLD)
+memcached_debug_LINK_PARAMS = $(memcached_debug_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
 sizes_SOURCES = sizes.c
 sizes_OBJECTS = sizes.$(OBJEXT)
@@ -202,7 +203,8 @@ am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
 am__v_CC_0 = @echo "  CC      " $@;
 am__v_CC_1 = 
 CCLD = $(CC)
-LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+LINK_EXEC = $(CCLD)
+LINK_PARAMS = $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
@@ -558,23 +560,23 @@ clean-noinstPROGRAMS:
 
 memcached$(EXEEXT): $(memcached_OBJECTS) $(memcached_DEPENDENCIES) $(EXTRA_memcached_DEPENDENCIES) 
 	@rm -f memcached$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(memcached_OBJECTS) $(memcached_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK_EXEC) $(memcached_OBJECTS) $(LINK_PARAMS) $(memcached_LDADD) $(LIBS)
 
 memcached-debug$(EXEEXT): $(memcached_debug_OBJECTS) $(memcached_debug_DEPENDENCIES) $(EXTRA_memcached_debug_DEPENDENCIES) 
 	@rm -f memcached-debug$(EXEEXT)
-	$(AM_V_CCLD)$(memcached_debug_LINK) $(memcached_debug_OBJECTS) $(memcached_debug_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(memcached_debug_LINK_EXEC) $(memcached_debug_OBJECTS) $(memcached_debug_LINK_PARAMS) $(memcached_debug_LDADD) $(LIBS)
 
 sizes$(EXEEXT): $(sizes_OBJECTS) $(sizes_DEPENDENCIES) $(EXTRA_sizes_DEPENDENCIES) 
 	@rm -f sizes$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(sizes_OBJECTS) $(sizes_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK_EXEC) $(sizes_OBJECTS) $(LINK_PARAMS) $(sizes_LDADD) $(LIBS)
 
 testapp$(EXEEXT): $(testapp_OBJECTS) $(testapp_DEPENDENCIES) $(EXTRA_testapp_DEPENDENCIES) 
 	@rm -f testapp$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(testapp_OBJECTS) $(testapp_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK_EXEC) $(testapp_OBJECTS) $(LINK_PARAMS) $(testapp_LDADD) $(LIBS)
 
 timedrun$(EXEEXT): $(timedrun_OBJECTS) $(timedrun_DEPENDENCIES) $(EXTRA_timedrun_DEPENDENCIES) 
 	@rm -f timedrun$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(timedrun_OBJECTS) $(timedrun_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK_EXEC) $(timedrun_OBJECTS) $(LINK_PARAMS) $(timedrun_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
