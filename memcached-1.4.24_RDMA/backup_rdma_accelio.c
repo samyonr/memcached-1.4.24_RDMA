@@ -49,6 +49,7 @@
 #include "backup_rdma_accelio.h"
 #include "libxio.h"
 #include "backup.h"
+#include "sharedmalloc.h"
 
 void create_basic_request(struct xio_msg *req);
 void create_queue_data_request(struct xio_msg *req);
@@ -77,7 +78,8 @@ void send_file_continue(struct xio_msg *req, int stepNumber);
 #define QUEUE_DEPTH			512
 #define PRINT_COUNTER		4000000
 #define DISCONNECT_NR		(2 * PRINT_COUNTER)
-#define MAX_MESSAGE_SIZE	1048576 // = 2 ^ 20 = the maximum size of the block that can be registered is limited to device_attr.max_mr_size
+//#define MAX_MESSAGE_SIZE	1048576 // = 2 ^ 20 = the maximum size of the block that can be registered is limited to device_attr.max_mr_size
+#define MAX_MESSAGE_SIZE	10000
 #define MAX_RDMA_BACKUPS	3
 
 
@@ -98,7 +100,11 @@ int test_disconnect;
 int g_backups_RDMA_count = 0;
 int g_queue_depth;
 int g_server_connected = 0;
-
+void *g_memcached1_slabs = NULL;
+void *g_memcached1_slabs_lists = NULL;
+void *g_memcached1_assoc = NULL;
+long g_original_data_size = 0;
+long g_data_size = 0;
 
 
 /* server private data */
@@ -387,8 +393,9 @@ static void process_request_server(struct server_data *server_data,
 	{
 		str_header = (char *)req->in.header.iov_base;
 		len_header = req->in.header.iov_len;
-
-		printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
+		const char *last_five = &str_header[len_header-6];
+		int step = 0;
+		//printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
 
 		for (i = 0; i < nents; i++)
 		{
@@ -399,29 +406,77 @@ static void process_request_server(struct server_data *server_data,
 
 			if (strncmp(str_header,"queue data step 1 sending",25) == 0)
 			{
-				rdma_load_memory_to_file("/tmp/memkey/assoc_key2", str_body, len_body, "ab");
+				step = 1;
+				memcpy((char *)g_memcached1_assoc + g_original_data_size - g_data_size, str_body,len_body);
+				g_data_size -= len_body;
 			}
 			else if (strncmp(str_header,"queue data step 1 start",23) == 0)
 			{
-				rdma_load_memory_to_file("/tmp/memkey/assoc_key2", str_body, len_body, "wb");
+				step = 1;
+				printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
+				g_memcached1_assoc = shared_malloc(NULL, 16777216,"assoc_key1",NO_LOCK);
+				g_original_data_size = 16777216;
+				g_data_size = g_original_data_size;
+				memcpy((char *)g_memcached1_assoc + g_original_data_size - g_data_size, str_body,len_body);
+				g_data_size -= len_body;
+				//rdma_load_memory_to_file("/tmp/memkey/assoc_key2", str_body, len_body, "wb");
 			}
 			else if (strncmp(str_header,"queue data step 2 sending",25) == 0)
 			{
-				rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "ab");
+				step = 2;
+				memcpy((char *)g_memcached1_slabs + g_original_data_size - g_data_size, str_body,len_body);
+				g_data_size -= len_body;
+
+				//rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "ab");
 			}
 			else if (strncmp(str_header,"queue data step 2 start",23) == 0)
 			{
-				rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "wb");
+				step = 2;
+				printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
+				g_memcached1_slabs = shared_malloc(NULL, 4294967296, "slabs_key1", NO_LOCK);
+				g_original_data_size = 4294967296;
+				g_data_size = g_original_data_size;
+				memcpy((char *)g_memcached1_slabs + g_original_data_size - g_data_size, str_body,len_body);
+				g_data_size -= len_body;
+				//rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "wb");
 			}
 			else if (strncmp(str_header,"queue data step 3 sending",25) == 0)
 			{
-				rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "ab");
+				step = 3;
+				memcpy((char *)g_memcached1_slabs_lists + g_original_data_size - g_data_size, str_body,len_body);
+				g_data_size -= len_body;
+				//rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "ab");
 			}
 			else if (strncmp(str_header,"queue data step 3 start",23) == 0)
 			{
-				rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "wb");
+				step = 3;
+				printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
+				g_memcached1_slabs_lists = shared_malloc(NULL, 4325, "slabs_lists_key1", NO_LOCK);
+				g_original_data_size = 4325;
+				g_data_size = g_original_data_size;
+				memcpy((char *)g_memcached1_slabs_lists + g_original_data_size - g_data_size, str_body,len_body);
+				g_data_size -= len_body;
+				//rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "wb");
 			}
 		}
+
+		if (strncmp(last_five, "final", 5) == 0)
+		{
+			printf("freeing memory of step %d, and size %ld\n",step,g_original_data_size);
+			if (step == 1)
+			{
+				shared_free(g_memcached1_assoc, g_original_data_size);
+			}
+			else if (step == 2)
+			{
+				shared_free(g_memcached1_slabs, g_original_data_size);
+			}
+			else //step == 3
+			{
+				shared_free(g_memcached1_slabs_lists, g_original_data_size);
+			}
+		}
+
 		server_data->cnt = 0;
 		req->in.header.iov_base	  = NULL;
 		req->in.header.iov_len	  = 0;
@@ -561,6 +616,7 @@ void send_file_continue(struct xio_msg *req, int stepNumber)
 		message_size = MAX_MESSAGE_SIZE;
 	}
 
+	free(req->out.data_iov.sglist[0].iov_base);
 	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * message_size);
 	for (i = 0; i < sizeof(char) * message_size; i++)
 	{

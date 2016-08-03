@@ -241,6 +241,7 @@ int sendBackupToClients(char *fileToSend, char *msg, int msgSize)
 		} while(size_temp > 0);
 	}
 
+	free(content);
 	return 0;
 }
 
@@ -457,7 +458,7 @@ void *connection_handler(void *socket_desc)
 				}
 				original_data_size = data_size;
 				step = 1;
-				memcached1_assoc = shared_malloc(NULL, original_data_size,"assoc_key1",HARD_LOCK);
+				memcached1_assoc = shared_malloc(NULL, original_data_size,"assoc_key1",NO_LOCK);
 				//f = fopen("/tmp/memkey/assoc_key1", "wb");
 				/*
 				if (f == NULL)
@@ -529,7 +530,7 @@ void *connection_handler(void *socket_desc)
 					return 0;
 				}
 				*/
-				memcached1_slabs = shared_malloc(NULL, original_data_size, "slabs_key1", HARD_LOCK);
+				memcached1_slabs = shared_malloc(NULL, original_data_size, "slabs_key1", NO_LOCK);
 			}
 			printf("Moving to step 2\n");
 		}
@@ -586,7 +587,7 @@ void *connection_handler(void *socket_desc)
 				}
 				step = 3;
 
-				memcached1_slabs_lists = shared_malloc(NULL, original_data_size, "slabs_lists_key1", HARD_LOCK);
+				memcached1_slabs_lists = shared_malloc(NULL, original_data_size, "slabs_lists_key1", NO_LOCK);
 				/*
 				f = fopen("/tmp/memkey/slabs_lists_key1", "wb");
 				if (f == NULL)
