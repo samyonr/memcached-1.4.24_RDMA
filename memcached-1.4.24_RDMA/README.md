@@ -17,6 +17,7 @@ Developed by Samyon Ristov from Hebrew University of Jerusalem, under the superv
 ## Hardware
 
 Netgear ProSafe XS708E Switch - a 8-port 10-Gigabit ProSAFE® Plus Switch.
+
 Mellanox Technologies MT27520 Family. ConnectX-3 Pro.
 
 ## Environment
