@@ -72,7 +72,7 @@ It’s worth to mention that when transmitting data via RDMA, in order to keep t
 The project used the following topology:
 
 <p align="center">
-![topology](https://github.com/samyonr/Cloud-Memcached/blob/master/memcached-1.4.24_RDMA/images/topology.png "Topology")
+<img src ="https://github.com/samyonr/Cloud-Memcached/blob/master/memcached-1.4.24_RDMA/images/topology.png" />
 </p>
 
 In order to run TCP failover use the following configuration:
