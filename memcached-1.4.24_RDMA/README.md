@@ -71,26 +71,30 @@ It’s worth to mention that when transmitting data via RDMA, in order to keep t
 
 The project used the following topology:
 
+<p align="center">
 ![topology](https://github.com/samyonr/Cloud-Memcached/blob/master/memcached-1.4.24_RDMA/images/topology.png "Topology")
+</p>
 
 In order to run TCP failover use the following configuration:
+
 On HA-102
+```sh
+-t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.1.1:5555 -o failover_src=10.0.1.2:5555 -o failover_comm_type=TCP
+```
+On HA-101
 ```sh
 -t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.1.2:5555 -o failover_src=10.0.1.1:5555 -o failover_comm_type=TCP
 ```
-On HA-101
-```sh
--t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.1.2:5555 -o failover_src=10.0.1.2:5555 -o failover_comm_type=TCP
-```
 
 In order to run RDMA failover use the following configuration:
+
 On HA-102
 ```sh
--t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.0.2:5555 -o failover_src=10.0.0.1:5555 -o failover_comm_type=RDMA
+-t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.0.1:5555 -o failover_src=10.0.0.2:5555 -o failover_comm_type=RDMA
 ```
 On HA-101
 ```sh
--t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.0.2:5555 -o failover_src=10.0.0.2:5555 -o failover_comm_type=RDMA
+-t 4 -m 4096 -o hashpower=21 -n 550 -L -u a315 -o shared_malloc_slabs=slabs_key1 -o shared_malloc_assoc=assoc_key1 -o shared_malloc_slabs_lists=slabs_lists_key1 -o failover_dest=10.0.0.2:5555 -o failover_src=10.0.0.1:5555 -o failover_comm_type=RDMA
 ```
 
 ### Testing

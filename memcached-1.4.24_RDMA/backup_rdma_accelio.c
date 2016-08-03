@@ -631,6 +631,7 @@ void send_file_continue(struct xio_msg *req, int stepNumber)
 		}
 
 		g_clientFilePos = 0;
+		printf("freeing g_clientFileData on step %d\n",stepNumber);
 		free(g_clientFileData);
 	}
 	else if (g_clientFilePos == 0)
@@ -648,6 +649,7 @@ void send_file_continue(struct xio_msg *req, int stepNumber)
 		}
 
 		g_clientFilePos = 0;
+		printf("freeing g_clientFileData on step %d\n",stepNumber);
 		free(g_clientFileData);
 	}
 	else
