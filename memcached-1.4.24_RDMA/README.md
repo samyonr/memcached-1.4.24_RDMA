@@ -70,6 +70,7 @@ It’s worth to mention that when transmitting data via RDMA, in order to keep t
 ### Configurations
 
 The project used the following topology:
+
 ![topology](https://github.com/samyonr/Cloud-Memcached/blob/master/memcached-1.4.24_RDMA/images/topology.png "Topology")
 
 In order to run TCP failover use the following configuration:
@@ -129,11 +130,16 @@ Which indicates that the Memcached on machine 10.0.0.2 received the stored infor
 
 I'm providing here a list of solution for Memcached replication and failover:
 
-repached - a server side memcached replication solution (http://repcached.lab.klab.org/) 
+repached - a server side memcached replication solution (http://repcached.lab.klab.org/)
+
 yrmcds - Memcached compatible server side failover solution (http://cybozu.github.io/yrmcds/)
+
 libMemcached - Server side replication solution (http://libmemcached.org/libMemcached.html)
+
 MemcacheDB - Memcached compatible DB solution (http://memcachedb.org/)
+
 Couchbase - Memcached compatible DB solution (http://www.couchbase.com/)
+
 
 ## Contributing
 
