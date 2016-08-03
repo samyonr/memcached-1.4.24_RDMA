@@ -47,7 +47,7 @@ void file_mutex_unlock(char *key){
   free(path);
 }
 */
-char *gen_full_path(const char*key, const char *dir);
+
 
 char *gen_full_path(const char* key, const char *dir){
   size_t keylen = strlen(key);

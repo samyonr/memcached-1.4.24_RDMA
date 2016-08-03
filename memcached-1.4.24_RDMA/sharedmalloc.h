@@ -12,7 +12,7 @@
 #define NO_LOCK 0
 #define SOFT_LOCK 1
 #define HARD_LOCK 2
-
+char *gen_full_path(const char*key, const char *dir);
 #define KEYPATH "/tmp/memkey/"
 #define LOCKPATH "/tmp/memlock/"
 

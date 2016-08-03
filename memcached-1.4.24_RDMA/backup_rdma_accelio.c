@@ -50,6 +50,7 @@
 #include "libxio.h"
 #include "backup.h"
 #include "sharedmalloc.h"
+#include "memcached.h"
 
 void create_basic_request(struct xio_msg *req);
 void create_queue_data_request(struct xio_msg *req);
@@ -414,12 +415,11 @@ static void process_request_server(struct server_data *server_data,
 			{
 				step = 1;
 				printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
-				g_memcached1_assoc = shared_malloc(NULL, 16777216,"assoc_key1",NO_LOCK);
+				g_memcached1_assoc = shared_malloc(NULL, 16777216, settings.shared_malloc_assoc_key,NO_LOCK);
 				g_original_data_size = 16777216;
 				g_data_size = g_original_data_size;
 				memcpy((char *)g_memcached1_assoc + g_original_data_size - g_data_size, str_body,len_body);
 				g_data_size -= len_body;
-				//rdma_load_memory_to_file("/tmp/memkey/assoc_key2", str_body, len_body, "wb");
 			}
 			else if (strncmp(str_header,"queue data step 2 sending",25) == 0)
 			{
@@ -427,36 +427,32 @@ static void process_request_server(struct server_data *server_data,
 				memcpy((char *)g_memcached1_slabs + g_original_data_size - g_data_size, str_body,len_body);
 				g_data_size -= len_body;
 
-				//rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "ab");
 			}
 			else if (strncmp(str_header,"queue data step 2 start",23) == 0)
 			{
 				step = 2;
 				printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
-				g_memcached1_slabs = shared_malloc(NULL, 4294967296, "slabs_key1", NO_LOCK);
+				g_memcached1_slabs = shared_malloc(NULL, 4294967296, settings.shared_malloc_slabs_key, NO_LOCK);
 				g_original_data_size = 4294967296;
 				g_data_size = g_original_data_size;
 				memcpy((char *)g_memcached1_slabs + g_original_data_size - g_data_size, str_body,len_body);
 				g_data_size -= len_body;
-				//rdma_load_memory_to_file("/tmp/memkey/slabs_key2", str_body, len_body, "wb");
 			}
 			else if (strncmp(str_header,"queue data step 3 sending",25) == 0)
 			{
 				step = 3;
 				memcpy((char *)g_memcached1_slabs_lists + g_original_data_size - g_data_size, str_body,len_body);
 				g_data_size -= len_body;
-				//rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "ab");
 			}
 			else if (strncmp(str_header,"queue data step 3 start",23) == 0)
 			{
 				step = 3;
 				printf("message header : [%llu] - %s\n", (unsigned long long)(req->sn + 1), str_header);
-				g_memcached1_slabs_lists = shared_malloc(NULL, 4325, "slabs_lists_key1", NO_LOCK);
+				g_memcached1_slabs_lists = shared_malloc(NULL, 4325, settings.shared_malloc_slabs_lists_key, NO_LOCK);
 				g_original_data_size = 4325;
 				g_data_size = g_original_data_size;
 				memcpy((char *)g_memcached1_slabs_lists + g_original_data_size - g_data_size, str_body,len_body);
 				g_data_size -= len_body;
-				//rdma_load_memory_to_file("/tmp/memkey/slabs_lists_key2", str_body, len_body, "wb");
 			}
 		}
 
@@ -622,7 +618,7 @@ void send_file_continue(struct xio_msg *req, int stepNumber)
 	{
 		((char *)(req->out.data_iov.sglist[0].iov_base))[i] = (g_clientFileData + g_clientFilePos)[i];
 	}
-	//snprintf(req->out.data_iov.sglist[0].iov_base, message_size, g_clientFileData + g_clientFilePos);
+
 	req->out.data_iov.sglist[0].iov_len = sizeof(char) * message_size;
 
 	if (g_clientFilePos == 0 && (message_size == g_clientFileSize - g_clientFilePos))
@@ -666,9 +662,9 @@ void send_file_continue(struct xio_msg *req, int stepNumber)
 
 void create_queue_data_request(struct xio_msg *req)
 {
-	//int length = snprintf(NULL, 0, "queue data request body, value=%d", value);
-	//void * p;
 
+
+	char *path;
 	req->in.sgl_type		  = XIO_SGL_TYPE_IOV;
 	req->in.data_iov.max_nents = XIO_IOVLEN;
 
@@ -689,7 +685,9 @@ void create_queue_data_request(struct xio_msg *req)
 		g_clientFileSize = 0;
 		g_clientFilePos = 0;
 
-		g_clientFileSize = rdma_load_file_to_memory("/tmp/memkey/assoc_key1", &g_clientFileData);
+		path = gen_full_path(settings.shared_malloc_assoc_key, KEYPATH);
+		g_clientFileSize = rdma_load_file_to_memory(path, &g_clientFileData);
+		free(path);
 		send_file_continue(req, 1);
 
 	}
@@ -703,7 +701,9 @@ void create_queue_data_request(struct xio_msg *req)
 		g_clientFileSize = 0;
 		g_clientFilePos = 0;
 
-		g_clientFileSize = rdma_load_file_to_memory("/tmp/memkey/slabs_key1", &g_clientFileData);
+		path = gen_full_path(settings.shared_malloc_slabs_key, KEYPATH);
+		g_clientFileSize = rdma_load_file_to_memory(path, &g_clientFileData);
+		free(path);
 		send_file_continue(req, 2);
 	}
 	else if (g_clientStep == 2 && g_clientFilePos != 0)
@@ -716,7 +716,9 @@ void create_queue_data_request(struct xio_msg *req)
 		g_clientFileSize = 0;
 		g_clientFilePos = 0;
 
-		g_clientFileSize = rdma_load_file_to_memory("/tmp/memkey/slabs_lists_key1", &g_clientFileData);
+		path = gen_full_path(settings.shared_malloc_slabs_lists_key, KEYPATH);
+		g_clientFileSize = rdma_load_file_to_memory(path, &g_clientFileData);
+		free(path);
 		send_file_continue(req, 3);
 	}
 	else // (g_clientStep == 3 && g_clientFilePos != 0)
@@ -727,31 +729,6 @@ void create_queue_data_request(struct xio_msg *req)
 	req->out.header.iov_len =
 		strlen((const char *)
 			req->out.header.iov_base) + 1;
-
-
-	//req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * size);
-
-	//snprintf(req->out.data_iov.sglist[0].iov_base, size, content);
-
-	//p = req->out.data_iov.sglist[0].iov_base;
-	//((char *)p)[0] = content;
-	//req->out.data_iov.sglist[0].iov_len = sizeof(char) * size;
-	/*
-	req->out.data_iov.sglist[0].iov_base = malloc(sizeof(int));
-	p = req->out.data_iov.sglist[0].iov_base;
-	((int *)p)[0] = value;
-	req->out.data_iov.sglist[0].iov_len = sizeof(int);
-	*/
-	//req->out.data_iov.sglist[0].iov_base = malloc(sizeof(char) * (length + 1));
-	//snprintf(req->out.data_iov.sglist[0].iov_base, length+1, "queue data request body, value=%d", value);
-
-	/*req->out.data_iov.sglist[0].iov_len =
-		strlen((const char *)
-		  req->out.data_iov.sglist[0].iov_base)
-		   + 1;
-	*/
-
-
 }
 
 /*---------------------------------------------------------------------------*/
