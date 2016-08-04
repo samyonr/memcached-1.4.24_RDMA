@@ -2,7 +2,7 @@
 
 Hebrew University of Jerusalem's proof of concept project integrating Memcached with RDMA in order to enable server's side failover.
 
-Memcached becomes more and more popular as a network function utility. Hence it's interesting to embed it into cloud environment, enabling scalability and failover. The current project is focusing on Memcached's failover, via TCP and via RDMA communication, using Accelio library. All the changes are made only on the server side, transparent to Memcached's clients.
+Memcached becomes more and more popular as a network function utility. Hence it's interesting to embed it into cloud environment, enabling scalability and failover. The current project is focusing on Memcached's failover, via BSD Sockets and via RDMA communication, using Accelio library. All the changes are made only on the server side, transparent to Memcached's clients.
 
 See more details under Description and Implementation section. 
 
@@ -58,7 +58,7 @@ In parallel to allocating memory on RAM, three files are created. The files cont
 
 ### Backup process
 
-The backup is possible in two different ways, via the standard TCP communication and via RDMA using Accelio library. The last requires a designated hardware, for example the one described in the Hardware section.
+The backup is possible in two different ways, via the standard BSD Sockets communication and via RDMA using Accelio library. The last requires a designated hardware, for example the one described in the Hardware section.
 
 Memcached in this project creates two new threads - one for backup client, and the other for backup server. On every STORED event (see complete_nread_ascii in memcached.c) a node is added to queue. The queue act as a sign to do a backup. While there is nodes in the queue the backup process will continue. When the queue is empty the backup process will stop and wait until new node is added to the queue. That notification mechanism could be done without any queue (and it was implemented without a queue at first), but using a queue is a preparation for sending more sophisticated data to the backup thread.
 
@@ -76,7 +76,7 @@ The project used the following topology:
 <img src ="https://github.com/samyonr/Cloud-Memcached/blob/master/memcached-1.4.24_RDMA/images/topology.png" />
 </p>
 
-In order to run TCP failover use the following configuration:
+In order to run BSD Socket failover use the following configuration:
 
 On HA-102
 ```sh
