@@ -73,7 +73,7 @@ It’s worth to mention that when transmitting data via RDMA, in order to keep t
 The project used the following topology:
 
 <p align="center">
-<img src ="https://github.com/samyonr/memcached-1.4.24_RDMA/blob/master/memcached-1.4.24_RDMA/images/topology.png" />
+<img src ="https://github.com/samyonr/memcached-1.4.24_RDMA/blob/master/images/topology.png" />
 </p>
 
 In order to run BSD Socket failover use the following configuration:
