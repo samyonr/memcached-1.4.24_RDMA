@@ -1,8 +1,8 @@
 /*
- * queue.h
- *
- *  Created on: Jun 16, 2016
- *      Author: a315
+ * Added as part of the memcached-1.4.24_RDMA project.
+ * C implementation of Queue Data Structure using Linked List
+ * source: http://www.sanfoundry.com/c-program-queue-using-linked-list/
+ * not thread safe
  */
 
 #ifndef QUEUE_H_
