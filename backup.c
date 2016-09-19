@@ -1,3 +1,15 @@
+/********************************************************
+ * Added as part of the memcached-1.4.24_RDMA project.
+ * Implementing backup system via BSD sockets.
+ * BackupClient method receives the address to connect too,
+ * connects to the Memcached Backup Server in connectToServer method, and runs a RunBackupClient thread.
+ * The client thread samples the queue every 2 seconds, and when there is an item in the queue,
+ * starts the backup process.
+ * BackupServer method receives an address to listen too,
+ * creates a RunBackupServer thread, and on each incoming connection starts connection_handler thread.
+ * After the connection with the client is establisged, the backup receives the memory backup, and closes the connection.
+ ********************************************************/
+
 #include "backup.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,19 +30,48 @@
 #include "memcached.h"
 
 #define MAXDATASIZE 10000 // max number of bytes we can get at once
+/*
+ * get sockaddr, IPv4 or IPv6:
+ */ 
 void *get_in_addr(struct sockaddr *sa);
+/*
+ * Closes the socket
+ */
 int closeSocket(int sockfd);
+/*
+ * Handels SIGCHLD Signal
+ */
 void sigchld_handler(int s);
+/*
+ * Server connection handler thread.
+ * Receives the memory backup within 3 steps - assoc, slabs and slabs_lists.
+ */
 void *connection_handler(void *socket_desc);
+/*
+ * Server backup thread. Waits for incoming communication.
+ */
 void *RunBackupServer(void *arg);
+/*
+ * Samples the queue every 2 seconds. When the queue is not empty,
+ * starts the backup process - sebds the assoc, slabs and slab_lists memory sections.
+ */
 void *RunBackupClient(void *arg);
+/*
+ * Connects via BSD Socket to the given server.
+ */
 int connectToServer(char *clientHostname, char *clientPort, int *sockfd);
+/*
+ * Load the given file into memory (RAM) and sends it in chunks via BSD Socket
+ */
 int sendBackupToClients(char *fileToSend, char *msg, int msgSize);
 
 static pthread_t g_serverThread;
 static int g_backups_count = 0;
 static int g_client_socketfd[MAX_BACKUPS];
 
+/*
+ * Loads the given file into the memory (RAM)
+ */
 long ae_load_file_to_memory(const char *filename, char **result)
 {
 	long size = 0;
@@ -54,6 +95,9 @@ long ae_load_file_to_memory(const char *filename, char **result)
 	return size;
 }
 
+/*
+ * Loads the given data into a file.
+ */
 long ae_load_memory_to_file(const char *filename, const char *data, const int size)
 {
 	FILE *f = fopen(filename, "wb");
@@ -71,6 +115,9 @@ long ae_load_memory_to_file(const char *filename, const char *data, const int si
 
 }
 
+/*
+ * splits string accroding to the given delimiter
+ */
 char** str_split(char* a_str, const char a_delim)
 {
     char** result    = 0;
@@ -119,7 +166,9 @@ char** str_split(char* a_str, const char a_delim)
     return result;
 }
 
-// get sockaddr, IPv4 or IPv6:
+/*
+ * get sockaddr, IPv4 or IPv6:
+ */ 
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET)
@@ -130,6 +179,9 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+/*
+ * Connects via BSD Socket to the given server.
+ */
 int connectToServer(char *clientHostname, char *clientPort, int *sockfd)
 {
     struct addrinfo hints, *servinfo, *p;
@@ -181,6 +233,11 @@ int connectToServer(char *clientHostname, char *clientPort, int *sockfd)
     return 0;
 }
 
+/*
+ * receivs data from sockfd, and returns it in buf.
+ * numbytes is the number of received bytes.
+ * The received data is null terminated.
+ */
 int receive(int sockfd, char *buf, int *numbytes)
 {
     *numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0);
@@ -197,6 +254,9 @@ int receive(int sockfd, char *buf, int *numbytes)
     return 0;
 }
 
+/*
+ * Closes the socket
+ */
 int closeSocket(int sockfd)
 {
 	close(sockfd);
@@ -205,6 +265,9 @@ int closeSocket(int sockfd)
 
 #define BACKLOG 10     // how many pending connections queue will hold
 
+/*
+ * Handels SIGCHLD Signal
+ */
 void sigchld_handler(int s)
 {
     // waitpid() might overwrite errno, so we save and restore it:
@@ -215,6 +278,9 @@ void sigchld_handler(int s)
     errno = saved_errno;
 }
 
+/*
+ * Load the given file into memory (RAM) and sends it in chunks via BSD Socket
+ */
 int sendBackupToClients(char *fileToSend, char *msg, int msgSize)
 {
 	int i;
@@ -298,6 +364,10 @@ int BackupServer(char *clientHostnamePortwithPort)
     return 0;
 }
 
+/*
+ * Samples the queue every 2 seconds. When the queue is not empty,
+ * starts the backup process - sebds the assoc, slabs and slab_lists memory sections.
+ */
 void *RunBackupClient(void *arg)
 {
 	int queue_val;
@@ -326,6 +396,9 @@ void *RunBackupClient(void *arg)
 	}
 }
 
+/*
+ * Server backup thread. Waits for incoming communication.
+ */
 void *RunBackupServer(void *arg)
 {
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
@@ -430,6 +503,10 @@ void *RunBackupServer(void *arg)
     exit(0);
 }
 
+/*
+ * Server connection handler thread.
+ * Receives the memory backup within 3 steps - assoc, slabs and slabs_lists.
+ */
 void *connection_handler(void *socket_desc)
 {
 	int received = 0;
