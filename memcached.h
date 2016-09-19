@@ -1,3 +1,10 @@
+/*
+ * Modified as part of the memcached-1.4.24_RDMA project.
+ * Adding BSD socket and RDMA (via Accelio) backup options.
+ * The backup occurs after every STORED event.
+ * In addition, large pages were enabled.
+ */
+
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /** \file
