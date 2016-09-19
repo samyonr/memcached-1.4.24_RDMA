@@ -1,3 +1,8 @@
+/*
+ * Modified as part of the memcached-1.4.24_RDMA project.
+ * Adding sharedmalloc option, and the slabs, and slab-lists are preallocated
+ */
+
 /* slabs memory allocation */
 #ifndef SLABS_H
 #define SLABS_H
