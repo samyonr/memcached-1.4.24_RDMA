@@ -1,3 +1,8 @@
+/*
+ * Modified as part of the memcached-1.4.24_RDMA project.
+ * Adding sharedmalloc option, and the slabs, and slab-lists are preallocated
+ */
+
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
  * Slabs memory allocation, based on powers-of-N. Slabs are up to 1MB in size
