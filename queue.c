@@ -1,7 +1,7 @@
 /*
- * C Program to Implement Queue Data Structure using Linked List
+ * Added as part of the memcached-1.4.24_RDMA project.
+ * C implementation of Queue Data Structure using Linked List
  * source: http://www.sanfoundry.com/c-program-queue-using-linked-list/
- * some modification were added in order to support multiple queues.
  * not thread safe
  */
 #include <stdio.h>
