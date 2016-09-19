@@ -1,4 +1,17 @@
 /*
+ * Added as part of the memcached-1.4.24_RDMA project.
+ * Implementing backup system via RDMA using Accelio.
+ * BackupClientRDMA method receives the address to connect too,
+ * and starts the RunBackupClientRDMA thread.
+ * RunBackupClientRDMA creates a connection and starts an event loop.
+ * On receiving response to a generic beacon message, the client samples the queue,
+ * and if the queue is not empty, starts the backup session.
+ * BackupServer receives the address to listen too,
+ * and starts the RunBackupServerRDMA thread.
+ * RunBackupServerRDMA starts and event loop, and responds to clients messages.
+ */
+
+/*
  * The code below is a modification of Mellanox's server and client examples.
  * Keeping their disclaimer.
  */
@@ -52,28 +65,70 @@
 #include "sharedmalloc.h"
 #include "memcached.h"
 
+/*
+ * Creates a beacon message, the verifies that the system is alive.
+ */
 void create_basic_request(struct xio_msg *req);
+/*
+ * Creates a sending data request.
+ * The request consist of 3 steps: sending assoc, slabs and slab_lists.
+ * Each memory section is sent in chunks, via different sequential requests.
+ */
 void create_queue_data_request(struct xio_msg *req);
+/*
+ * Listens to connection from client, and on receiving it starts an event loop.
+ */
 void *RunBackupServerRDMA(void *arg);
+/*
+ * Load the given file into memory (RAM) and sends it in chunks via BSD Socket
+ */
 long rdma_load_file_to_memory(const char *filename, char **result);
+/*
+ * Loads the given data into a file.
+ */
 int rdma_load_memory_to_file(const char *filename, const char *data, const int size, char *opentype);
+/*
+ * Creates a connection with the given address, and starts an event loop.
+ */
 void *RunBackupClientRDMA(void *arg);
+/*
+ * on_session_event
+ * Decides how to close the connectoin in case of teardown and connection_teardown events
+ */
 static int on_session_event_client(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context);
+/*
+ * Parses the response.
+ * Samples the queue, and when the queue isn't empty, starts sending backup data.
+ */
 static int on_response_client(struct xio_session *session, struct xio_msg *rsp,
 		       int last_in_rxq,
 		       void *cb_user_context);
+/*
+ * Creates/Destroys the connection.
+ */
 static int on_session_event_server(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context);
+/*
+ * Creates a connection.
+ */
 static int on_new_session_server(struct xio_session *session,
 			  struct xio_new_session_req *req,
 			  void *cb_user_context);
+/*
+ * Parser the server's request.
+ */
 static int on_request_server(struct xio_session *session,
 		      struct xio_msg *req,
 		      int last_in_rxq,
 		      void *cb_user_context);
+/*
+ * Sends data file in chunks.
+ * The file that will be sent depends on the step number,
+ * and the chunk that will be sent depend on the amount of bytes already sent.
+ */
 void send_file_continue(struct xio_msg *req, int stepNumber);
 
 #define QUEUE_DEPTH			512
@@ -139,9 +194,10 @@ struct session_data {
 };
 
 
-/*---------------------------------------------------------------------------*/
-/* on_session_event							     */
-/*---------------------------------------------------------------------------*/
+/*
+ * on_session_event
+ * Decides how to close the connectoin in case of teardown and connection_teardown events
+ */
 static int on_session_event_client(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context)
@@ -167,6 +223,9 @@ static int on_session_event_client(struct xio_session *session,
 	return 0;
 }
 
+/*
+ * Processes the response from client, and prints it.
+ */
 static void process_response_client(struct session_data *session_data,
 			     struct xio_msg *rsp)
 {
@@ -199,6 +258,10 @@ static void process_response_client(struct session_data *session_data,
 	}
 }
 
+/*
+ * Parses the response.
+ * Samples the queue, and when the queue isn't empty, starts sending backup data.
+ */
 static int on_response_client(struct xio_session *session,
 		       struct xio_msg *rsp,
 		       int last_in_rxq,
@@ -254,7 +317,9 @@ static int on_response_client(struct xio_session *session,
 	return 0;
 }
 
-
+/*
+ * Load the given file into memory (RAM) and sends it in chunks via BSD Socket
+ */
 long rdma_load_file_to_memory(const char *filename, char **result)
 {
 	long size = 0;
@@ -278,6 +343,9 @@ long rdma_load_file_to_memory(const char *filename, char **result)
 	return size;
 }
 
+/*
+ * Loads the given data into a file.
+ */
 int rdma_load_memory_to_file(const char *filename, const char *data, const int size, char *opentype)
 {
 	FILE *f = fopen(filename, opentype);
@@ -296,7 +364,7 @@ int rdma_load_memory_to_file(const char *filename, const char *data, const int s
 }
 
 /*---------------------------------------------------------------------------*/
-/* ring_get_next_msg							     */
+/* ring_get_next_msg - creates a generic beacon message							     */
 /*---------------------------------------------------------------------------*/
 static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 {
@@ -340,7 +408,8 @@ static inline struct xio_msg *ring_get_next_msg(struct server_data *sd)
 }
 
 /*---------------------------------------------------------------------------*/
-/* process_request							     */
+/* process_request - process a beacon request and prints it.                 */
+/* In case of data request, copies the received data to the right memory region */
 /*---------------------------------------------------------------------------*/
 static void process_request_server(struct server_data *server_data,
 			    struct xio_msg *req)
@@ -480,9 +549,9 @@ static void process_request_server(struct server_data *server_data,
 	}
 }
 
-/*---------------------------------------------------------------------------*/
-/* on_session_event	server						     */
-/*---------------------------------------------------------------------------*/
+/*
+ * Creates/Destroys the connection.
+ */
 static int on_session_event_server(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context)
@@ -513,9 +582,9 @@ static int on_session_event_server(struct xio_session *session,
 	return 0;
 }
 
-/*---------------------------------------------------------------------------*/
-/* on_new_session							     */
-/*---------------------------------------------------------------------------*/
+/*
+ * Creates a connection.
+ */
 static int on_new_session_server(struct xio_session *session,
 			  struct xio_new_session_req *req,
 			  void *cb_user_context)
@@ -533,9 +602,9 @@ static int on_new_session_server(struct xio_session *session,
 	return 0;
 }
 
-/*---------------------------------------------------------------------------*/
-/* on_request callback							     */
-/*---------------------------------------------------------------------------*/
+/*
+ * Parser the server's request.
+ */
 static int on_request_server(struct xio_session *session,
 		      struct xio_msg *req,
 		      int last_in_rxq,
@@ -573,6 +642,9 @@ static struct xio_session_ops  server_ops __attribute__ ((unused)) = {
 	.on_msg_error			=  NULL
 };
 
+/*
+ * Creates a beacon message, the verifies that the system is alive.
+ */
 void create_basic_request(struct xio_msg *req)
 {
 	req->out.header.iov_base =
@@ -597,6 +669,11 @@ void create_basic_request(struct xio_msg *req)
 	req->out.data_iov.nents = 1;
 }
 
+/*
+ * Sends data file in chunks.
+ * The file that will be sent depends on the step number,
+ * and the chunk that will be sent depend on the amount of bytes already sent.
+ */
 void send_file_continue(struct xio_msg *req, int stepNumber)
 {
 	int message_size = 0;
@@ -662,6 +739,11 @@ void send_file_continue(struct xio_msg *req, int stepNumber)
 	req->out.header.iov_base = strdup(buffer);
 }
 
+/*
+ * Creates a sending data request.
+ * The request consist of 3 steps: sending assoc, slabs and slab_lists.
+ * Each memory section is sent in chunks, via different sequential requests.
+ */
 void create_queue_data_request(struct xio_msg *req)
 {
 
@@ -733,8 +815,7 @@ void create_queue_data_request(struct xio_msg *req)
 			req->out.header.iov_base) + 1;
 }
 
-/*---------------------------------------------------------------------------*/
-/* main									     */
+/*---------------------------------------------------------------------------*/								     */
 /*---------------------------------------------------------------------------*/
 int BackupServerRDMA(char *clientHostnamePortwithPort)
 {
@@ -752,7 +833,9 @@ int BackupServerRDMA(char *clientHostnamePortwithPort)
     return 0;
 }
 
-
+/*
+ * Listens to connection from client, and on receiving it starts an event loop.
+ */
 void *RunBackupServerRDMA(void *arg)
 {
 	struct xio_server	*server;	/* server portal */
@@ -821,6 +904,8 @@ void *RunBackupServerRDMA(void *arg)
 	exit(0);
 }
 
+/*---------------------------------------------------------------------------*/								     */
+/*---------------------------------------------------------------------------*/
 int BackupClientRDMA(char *clientHostnamePortwithPort)
 {
 	if (g_backups_RDMA_count >= MAX_RDMA_BACKUPS)
@@ -844,6 +929,9 @@ int BackupClientRDMA(char *clientHostnamePortwithPort)
     return 0;
 }
 
+/*
+ * Creates a connection with the given address, and starts an event loop.
+ */
 void *RunBackupClientRDMA(void *arg)
 {
 	struct xio_session		*session;
