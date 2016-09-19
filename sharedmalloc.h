@@ -1,3 +1,11 @@
+/*
+ * Added as part of the memcached-1.4.24_RDMA project.
+ * Allocates shared memory of a given size.
+ * The memory is shared across all processes that use the same key.
+ * sharedmalloc is implemented using mmap.
+ * Created by Benjamin (Ben) Chaney.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/mman.h>
