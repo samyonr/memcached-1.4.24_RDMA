@@ -1,3 +1,8 @@
+/*
+ * The main modifications for memcached-1.4.24_RDMA project
+ * were adding shared_malloc option, and forbidding work without preallocation
+ */
+
 /* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
  * Hash table
